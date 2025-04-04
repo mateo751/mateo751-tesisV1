@@ -2,9 +2,9 @@ import Layout from "@/components/layout/Layout";
 import RegisterForm from "@/components/auth/RegisterForm";
 
 export default function RegisterPage() {
-return (
-    <Layout>
+    return (
+        <Layout>
         <RegisterForm />
-    </Layout>
+        </Layout>
     );
 }
