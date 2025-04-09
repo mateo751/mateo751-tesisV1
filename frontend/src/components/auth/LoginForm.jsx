@@ -24,14 +24,25 @@ export default function LoginForm() {
         setIsLoading(true);
         setError("");
         try {
-            await login({
+            const response = await login({
                 username: formData.username,
                 password: formData.password
             });
-            navigate('/');
+            
+            if (response.data.success) {
+                navigate('/sms'); // Cambiado de '/admin/sms' a '/sms'
+            } else {
+                setError("Error en la respuesta del servidor");
+            }
         } catch (error) {
             console.error('Error durante el login:', error);
-            setError("Usuario o contraseña incorrectos");
+            if (error.response?.status === 404) {
+                setError("Error de conexión con el servidor");
+            } else if (error.response?.status === 401) {
+                setError("Usuario o contraseña incorrectos");
+            } else {
+                setError("Error al intentar iniciar sesión");
+            }
         } finally {
             setIsLoading(false);
         }
