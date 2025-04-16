@@ -35,7 +35,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             refresh_token = tokens['refresh']#Token de refresco
             serializer = UserSerializer(request.user, many=False)#Serializador para obtener el usuario
             res = Response()#Respuesta
-            res.data = {'success':True}#Datos de la respuesta
+            res.data = {'success':True, 'user':serializer.data, 'access':access_token}#Datos de la respuesta
             res.set_cookie(key='access_token', value=str(access_token), httponly=True, secure=True, samesite='None', path='/')#Establecer el cookie de acceso
             res.set_cookie(key='refresh_token', value=str(refresh_token), httponly=True, secure=True, samesite='None', path='/')#Establecer el cookie de refresco
             return res#Devolver la respuesta

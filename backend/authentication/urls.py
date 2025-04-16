@@ -8,8 +8,6 @@ from .views import CustomTokenObtainPairView, CustomTokenRefreshView, logout, ge
 urlpatterns = [
     path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),#URL para obtener el token de acceso
     path('logout/', logout, name='logout'),#URL para cerrar sesión
-    path('token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),#URL para refrescar el token de acceso
-    path('todos/', get_todos, name='get_todos'),#URL para obtener todos los todos
     path('register/', register, name='register'),#URL para registrar un usuario
     path('auth/', is_logged_in, name='is_logged_in'),#URL para verificar si el usuario está autenticado
 ]
