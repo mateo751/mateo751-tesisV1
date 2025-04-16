@@ -25,7 +25,7 @@ const SMSAdminPage = () => {
             <Route path="/:id" element={<SMSDetails />} />
             
             {/* Redirección para rutas no encontradas */}
-            <Route path="*" element={<Navigate replace to="/admin/sms" />} />
+            <Route path="*" element={<Navigate replace to="/sms" />} />
             </Routes>
         </div>
         </SMSProvider>

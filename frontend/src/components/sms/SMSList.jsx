@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { smsService } from '../../services/smsService';
-import { useAuth } from '../../context/AuthContext';
+import { smsService } from '@/services/smsService';
+import { useAuth } from '@/context/AuthContext';
+import MappingTable from '@/components/admin/SMSTable'
+import Layout from "@/components/layout/Layout";
 
 const SMSList = () => {
     const [smsList, setSmsList] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('')
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { user } = useAuth();
@@ -59,75 +62,53 @@ const SMSList = () => {
         return null; // No renderizar nada si no hay usuario autenticado
     }
 
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    if (loading) return (
+        <Layout>
+            <div className="container mx-auto px-4 py-20 text-center">
+                <div className="text-2xl font-medium">Cargando...</div>
             </div>
-        );
-    }
+        </Layout>
+    );
+    
+    if (error) return (
+        <Layout>
+            <div className="container mx-auto px-4 py-20 text-center">
+                <div className="text-2xl font-medium text-red-500">Error: {error}</div>
+            </div>
+        </Layout>
+    );
 
     return (
-        <div className="container mx-auto px-4 py-8">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Lista de SMS</h1>
-                <Link
-                    to="/sms/new"
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700"
-                >
-                    Crear Nuevo SMS
-                </Link>
-            </div>
-
-            {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    {error}
-                </div>
-            )}
-
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {smsList.map((sms) => (
-                    <div
-                        key={sms.id}
-                        className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-                    >
-                        <h2 className="text-xl font-semibold mb-2">{sms.titulo_estudio}</h2>
-                        <p className="text-gray-600 mb-2">Autores: {sms.autores}</p>
-                        <p className="text-gray-600 mb-4">
-                            Fecha de creación: {new Date(sms.fecha_creacion).toLocaleDateString()}
-                        </p>
-                        
-                        <div className="flex justify-end space-x-2">
-                            <Link
-                                to={`/sms/${sms.id}`}
-                                className="text-indigo-600 hover:text-indigo-800"
-                            >
-                                Ver
-                            </Link>
-                            <Link
-                                to={`/sms/${sms.id}/edit`}
-                                className="text-green-600 hover:text-green-800"
-                            >
-                                Editar
-                            </Link>
-                            <button
-                                onClick={() => handleDelete(sms.id)}
-                                className="text-red-600 hover:text-red-800"
-                            >
-                                Eliminar
-                            </button>
+        <Layout>
+            <section className="py-10 md:py-20 w-full bg-base-200">
+                <div className="container mx-auto px-6 md:px-6"> 
+                    <div className='mb-10'>
+                        <h2 className="text-2x1 font-bold">Gestión de Mapeos Sistemáticos</h2>
+                        <p className="text-gray-500">Administre todos sus mapeos en un solo lugar.</p>
+                    </div>
+                    
+                {error && (
+                    <div className="alert alert-error shadow-lg mb-6">
+                        <div>
+                            <span>{error}</span>
                         </div>
                     </div>
-                ))}
-            </div>
-
-            {smsList.length === 0 && !error && (
-                <div className="text-center text-gray-500 mt-8">
-                    No hay SMS disponibles. ¡Crea uno nuevo!
+                )}
+                
+                <div className="card bg-base-100 shadow-md">
+                    <div className="card-body">
+                        
+                        <MappingTable
+                            mappings={smsList}
+                            searchTerm={searchTerm}
+                            setSearchTerm={setSearchTerm}
+                            onDelete={handleDelete}
+                        />
+                    </div>
                 </div>
-            )}
-        </div>
+                </div>
+            </section>
+        </Layout>
     );
 };
-
-export default SMSList; 
+export default SMSList;

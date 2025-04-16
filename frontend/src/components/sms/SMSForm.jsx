@@ -52,7 +52,7 @@ const SMSForm = ({ smsId = null, initialData = null }) => {
             } else {
                 await smsService.createSMS(formData);
             }
-            navigate('/admin/sms/');
+            navigate('/sms/');
         } catch (err) {
             setError('Error al guardar el SMS');
             console.error(err);

@@ -234,7 +234,7 @@ return (
             <div className="flex justify-end space-x-3">
             <button
                 type="button"
-                onClick={() => navigate('/admin/sms')}
+                onClick={() => navigate('/sms')}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
                 disabled={submitting}
             >

@@ -40,7 +40,7 @@ const SMSDetails = () => {
     if (window.confirm('¿Estás seguro de que deseas eliminar este SMS?')) {
       const success = await deleteSMS(id);
       if (success) {
-        navigate('/admin/sms');
+        navigate('/sms');
       }
     }
   };
