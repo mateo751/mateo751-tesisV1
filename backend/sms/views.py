@@ -168,9 +168,9 @@ class ArticleViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = ArticleSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['anio', 'fuente', 'tipo_registro', 'estado']
-    search_fields = ['titulo', 'autores', 'abstract', 'palabras_clave', 'doi']
-    ordering_fields = ['anio', 'fecha_creacion', 'titulo']
+    filterset_fields = ['anio_publicacion', 'enfoque', 'tipo_registro', 'estado']
+    search_fields = ['titulo', 'autores', 'resumen', 'palabras_clave', 'doi']
+    ordering_fields = ['anio_publicacion', 'fecha_creacion', 'titulo']
     
     def get_queryset(self):
         """Filtra artículos por SMS_id y usuario autenticado"""
@@ -254,19 +254,19 @@ class ArticleViewSet(viewsets.ModelViewSet):
             
             # Escribimos el encabezado
             headers = [
-                'ID', 'Título', 'Autores', 'Año', 'Abstract', 
-                'Palabras Clave', 'DOI', 'URL', 'Fuente', 
-                'Tipo de Registro', 'Estado', 'Notas'
+                'ID', 'Título', 'Autores', 'Año', 'Resumen', 
+                'Palabras Clave', 'DOI', 'URL', 'Enfoque', 
+                'Tipo de Registro', 'Tipo de Técnica', 'Estado', 'Notas'
             ]
             writer.writerow(headers)
             
             # Escribimos los datos
             for article in queryset:
                 row = [
-                    article.id, article.titulo, article.autores, article.anio,
-                    article.abstract, article.palabras_clave, article.doi,
-                    article.url, article.fuente, article.tipo_registro,
-                    article.estado, article.notas
+                    article.id, article.titulo, article.autores, article.anio_publicacion,
+                    article.resumen, article.palabras_clave, article.doi,
+                    article.url, article.enfoque, article.tipo_registro,
+                    article.tipo_tecnica, article.estado, article.notas
                 ]
                 writer.writerow(row)
             
