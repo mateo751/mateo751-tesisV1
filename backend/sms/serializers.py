@@ -32,9 +32,9 @@ class ArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Article
         fields = [
-            'id', 'titulo', 'autores', 'anio', 'abstract', 
-            'palabras_clave', 'doi', 'url', 'fuente', 
-            'tipo_registro', 'estado', 'notas',
+            'id', 'titulo', 'autores', 'anio_publicacion', 'resumen', 
+            'palabras_clave', 'doi', 'url', 'enfoque', 
+            'tipo_registro', 'tipo_tecnica', 'estado', 'notas',
             'fecha_creacion', 'fecha_actualizacion'
         ]
 
@@ -46,7 +46,8 @@ class SMSDetailSerializer(serializers.ModelSerializer):
         model = SMS
         fields = [
             'id', 'titulo_estudio', 'autores', 'pregunta_principal',
-            'sub_preguntas', 'cadena_busqueda', 'anio_inicio', 'anio_final',
+            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',  # Corregir estos campos
+            'cadena_busqueda', 'anio_inicio', 'anio_final',
             'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
             'tipo_registro', 'tipo_tecnica', 'usuario', 'fecha_creacion',
             'fecha_actualizacion', 'articles'
@@ -58,7 +59,8 @@ class SMSCreateUpdateSerializer(serializers.ModelSerializer):
         model = SMS
         fields = [
             'titulo_estudio', 'autores', 'pregunta_principal',
-            'sub_preguntas', 'cadena_busqueda', 'anio_inicio', 'anio_final',
+            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',  # Corregir estos campos
+            'cadena_busqueda', 'anio_inicio', 'anio_final',
             'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
             'tipo_registro', 'tipo_tecnica'
         ]
