@@ -26,7 +26,7 @@ const SMSList = () => {
             setLoading(true);
             setError(null);
             const data = await smsService.getAllSMS();
-            setSmsList(data);
+            setSmsList(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Error al cargar la lista de SMS:', err);
             if (err.response?.status === 401) {
