@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SMSNavButtons = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, isLastStep }) => {
+const StepNavigator = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, isLastStep }) => {
   return (
     <div className="flex justify-between mt-8">
       {currentStep > 1 && (
@@ -38,4 +38,4 @@ const SMSNavButtons = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, 
   );
 };
 
-export default SMSNavButtons;
+export default StepNavigator;

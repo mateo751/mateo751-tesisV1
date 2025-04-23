@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SMSBasicInfoStep = ({ formData, handleChange, errors }) => {
+const QuestionStep = ({ formData, handleChange, errors }) => {
     return (
         <div className="space-y-4">
         <h2 className="text-xl font-semibold mb-4">Mapeos Sistemáticos</h2>
@@ -94,4 +94,4 @@ const SMSBasicInfoStep = ({ formData, handleChange, errors }) => {
     );
 };
 
-export default SMSBasicInfoStep;
+export default QuestionStep;
