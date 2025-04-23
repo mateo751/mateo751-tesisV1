@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SMSSearchStep = ({ formData, handleChange, errors }) => {
+const ScopingStep = ({ formData, handleChange, errors }) => {
     const currentYear = new Date().getFullYear();
     
     return (
@@ -64,4 +64,4 @@ const SMSSearchStep = ({ formData, handleChange, errors }) => {
     );
 };
 
-export default SMSSearchStep;
+export default ScopingStep;

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SMSStepIndicator = ({ currentStep, totalSteps }) => {
+const ProcessTracker = ({ currentStep, totalSteps }) => {
     return (
         <div className="mb-8">
         <div className="flex justify-between">
@@ -18,4 +18,4 @@ const SMSStepIndicator = ({ currentStep, totalSteps }) => {
     );
 };
 
-export default SMSStepIndicator;
+export default ProcessTracker;

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSMS } from '@/context/SMSContext';
-import SMSBasicInfoStep from '@/components/sms/create/SMSBasicInfoStep';
-import SMSSearchStep from '@/components/sms/create/SMSSearchStep';
-import SMSCriteriaStep from '@/components/sms/create/SMSCriteriaStep';
-import SMSStepIndicator from '@/components/sms/create/SMSStepIndicator';
-import SMSNavButtons from '@/components/sms/create/SMSNavButtons';
+import QuestionStep from '@/components/process/planning/QuestionStep';
+import ScopingStep from '@/components/process/planning/ScopingStep';
+import InclusionStep from '@/components/process/identification/InclusionStep';
+import ProcessTracker from '@/components/process/shared/ProcessTracker';
+import StepNavigator from '@/components/process/shared/StepNavigator';
 
 const initialFormData = {
   // Paso 1: Información básica
@@ -24,7 +24,7 @@ const initialFormData = {
   criterios_exclusion: '',
 };
 
-const SMSCreationForm = () => {
+const ProcessManager = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState(initialFormData);
   const [errors, setErrors] = useState({});
@@ -140,7 +140,7 @@ const SMSCreationForm = () => {
     switch (currentStep) {
       case 1:
         return (
-          <SMSBasicInfoStep
+          <QuestionStep
             formData={formData}
             handleChange={handleChange}
             errors={errors}
@@ -148,7 +148,7 @@ const SMSCreationForm = () => {
         );
       case 2:
         return (
-          <SMSSearchStep
+          <ScopingStep
             formData={formData}
             handleChange={handleChange}
             errors={errors}
@@ -156,7 +156,7 @@ const SMSCreationForm = () => {
         );
       case 3:
         return (
-          <SMSCriteriaStep
+          <InclusionStep
             formData={formData}
             handleChange={handleChange}
             errors={errors}
@@ -171,12 +171,12 @@ const SMSCreationForm = () => {
     <div className="bg-base-100 p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-6 text-center">Mapeos Sistemáticos</h1>
       
-      <SMSStepIndicator currentStep={currentStep} totalSteps={3} />
+      <ProcessTracker currentStep={currentStep} totalSteps={3} />
       
       <form onSubmit={handleSubmit}>
         {renderStep()}
         
-        <SMSNavButtons
+        <StepNavigator
           currentStep={currentStep}
           totalSteps={3}
           onNext={nextStep}
@@ -201,4 +201,4 @@ const SMSCreationForm = () => {
   );
 };
 
-export default SMSCreationForm;
+export default ProcessManager;

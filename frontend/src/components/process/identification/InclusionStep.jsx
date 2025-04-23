@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const SMSCriteriaStep = ({ formData, handleChange, errors }) => {
+const InclusionStep = ({ formData, handleChange, errors }) => {
   const [inclusionInput, setInclusionInput] = useState('');
   const [exclusionInput, setExclusionInput] = useState('');
 
@@ -108,4 +108,4 @@ const SMSCriteriaStep = ({ formData, handleChange, errors }) => {
   );
 };
 
-export default SMSCriteriaStep;
+export default InclusionStep;

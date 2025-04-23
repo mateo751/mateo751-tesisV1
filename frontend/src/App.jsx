@@ -6,9 +6,8 @@ import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import SMSList from "@/components/SMS/SMSList";
-import SMSDetails from "@/components/admin/SMSDetails";
 import SMSForm from "@/components/SMS/SMSForm";
-import SMSCreationForm from '@/components/sms/create/SMSCreationForm';
+import ProcessManager from '@/components/process/shared/ProcessManager';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 function App() {
@@ -30,7 +29,7 @@ function App() {
               } />
               <Route path="/sms/new" element={
                 <ProtectedRoute>
-                  <SMSCreationForm />
+                  <ProcessManager />
                 </ProtectedRoute>
               } />
               <Route path="/sms/:id" element={
