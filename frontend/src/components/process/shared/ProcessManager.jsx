@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSMS } from '@/context/SMSContext';
 import { smsService } from '@/services/smsService';
@@ -20,6 +20,7 @@ const initialFormData = {
   cadena_busqueda: '',
   anio_inicio: 2000,
   anio_final: new Date().getFullYear(),
+  fuentes: '',
   // Paso 3: Criterios
   criterios_inclusion: '',
   criterios_exclusion: '',
@@ -35,72 +36,48 @@ const ProcessManager = () => {
   const navigate = useNavigate();
   const { fetchSMSById } = useSMS();
   const [loading, setLoading] = useState(false);
+  const [dataInitialized, setDataInitialized] = useState(false);
 
-  // Usar useCallback para memoizar la función loadSMSData
-  const loadSMSData = useCallback(async (id) => {
-    if (!id) {
-      console.log('No hay ID para cargar datos');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const data = await fetchSMSById(id);
-      if (data) {
-        setFormData({
-          titulo_estudio: data.titulo_estudio || '',
-          autores: data.autores || '',
-          pregunta_principal: data.pregunta_principal || '',
-          subpregunta_1: data.subpregunta_1 || '',
-          subpregunta_2: data.subpregunta_2 || '',
-          subpregunta_3: data.subpregunta_3 || '',
-          cadena_busqueda: data.cadena_busqueda || '',
-          anio_inicio: data.anio_inicio || 2000,
-          anio_final: data.anio_final || new Date().getFullYear(),
-          criterios_inclusion: data.criterios_inclusion || '',
-          criterios_exclusion: data.criterios_exclusion || '',
-        });
-      } else {
-        throw new Error('No se encontraron datos para el SMS');
-      }
-    } catch (error) {
-      console.error('Error al cargar los datos:', error);
-      setErrors({ general: "Error al cargar los datos: " + error.message });
-      // Si hay error al cargar, limpiamos el localStorage
-      localStorage.removeItem('sms_draft');
-      localStorage.removeItem('sms_step');
-      localStorage.removeItem('sms_id');
-      // Redirigir al inicio si hay error al cargar
-      navigate('/sms');
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchSMSById, navigate]);
-
-  // Cargar datos si hay un ID existente
+  // Cargar datos solo una vez al inicio
   useEffect(() => {
-    const checkSavedData = async () => {
-      // Evitar múltiples llamadas si ya estamos cargando datos
-      if (loading) return;
-      
+    if (dataInitialized) return;
+    
+    const initializeData = async () => {
+      setLoading(true);
       try {
         // Intentar cargar del localStorage
         const savedData = localStorage.getItem('sms_draft');
         const savedStep = localStorage.getItem('sms_step');
         const savedId = localStorage.getItem('sms_id');
         
-        if (smsId) {
-          // Si hay un ID en la URL, cargamos del servidor
-          await loadSMSData(smsId);
-          if (savedStep) {
-            setCurrentStep(parseInt(savedStep));
-          }
-        } else if (savedId) {
-          // Si hay un ID guardado localmente, lo usamos
-          setSmsId(savedId);
-          await loadSMSData(savedId);
-          if (savedStep) {
-            setCurrentStep(parseInt(savedStep));
+        let idToUse = id || savedId || null;
+        
+        if (idToUse) {
+          // Si hay un ID, cargamos del servidor
+          const data = await fetchSMSById(idToUse);
+          if (data) {
+            setSmsId(idToUse);
+            setFormData({
+              titulo_estudio: data.titulo_estudio || '',
+              autores: data.autores || '',
+              pregunta_principal: data.pregunta_principal || '',
+              subpregunta_1: data.subpregunta_1 || '',
+              subpregunta_2: data.subpregunta_2 || '',
+              subpregunta_3: data.subpregunta_3 || '',
+              cadena_busqueda: data.cadena_busqueda && data.cadena_busqueda !== '(pendiente)' 
+                ? data.cadena_busqueda : '',
+              anio_inicio: data.anio_inicio || 2000,
+              anio_final: data.anio_final || new Date().getFullYear(),
+              fuentes: data.fuentes && data.fuentes !== 'Por definir' ? data.fuentes : '',
+              criterios_inclusion: data.criterios_inclusion && data.criterios_inclusion !== 'Por definir' 
+                ? data.criterios_inclusion : '',
+              criterios_exclusion: data.criterios_exclusion && data.criterios_exclusion !== 'Por definir' 
+                ? data.criterios_exclusion : '',
+            });
+            
+            if (savedStep) {
+              setCurrentStep(parseInt(savedStep));
+            }
           }
         } else if (savedData) {
           // Si solo hay datos locales, los cargamos
@@ -116,25 +93,45 @@ const ProcessManager = () => {
             localStorage.removeItem('sms_step');
           }
         }
+        
+        setDataInitialized(true);
       } catch (error) {
-        console.error('Error al cargar datos guardados:', error);
-        // Si hay error al cargar, limpiamos el localStorage para evitar futuros errores
+        console.error('Error al inicializar datos:', error);
+        // Si hay error, limpiamos el localStorage
         localStorage.removeItem('sms_draft');
         localStorage.removeItem('sms_step');
         localStorage.removeItem('sms_id');
+      } finally {
+        setLoading(false);
       }
     };
     
-    checkSavedData();
-  }, [smsId]); // Solo depender de smsId
+    initializeData();
+  }, [id, fetchSMSById]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
     
+    // Para campos numéricos, convertir el valor a número si es necesario
+    let finalValue = value;
+    if (name === 'anio_inicio' || name === 'anio_final') {
+      finalValue = value === '' ? '' : Number(value);
+    }
+    
+    // Actualizar el estado local del formulario
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: finalValue
+      };
+      
+      // Guardar en localStorage
+      localStorage.setItem('sms_draft', JSON.stringify(updated));
+      
+      return updated;
+    });
+    
+    // Limpiar errores
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -156,6 +153,15 @@ const ProcessManager = () => {
       if (!formData.cadena_busqueda.trim()) newErrors.cadena_busqueda = 'La cadena de búsqueda es obligatoria';
       if (formData.anio_inicio > formData.anio_final) {
         newErrors.anio_inicio = 'El año de inicio debe ser menor que el año final';
+      }
+    }
+    
+    if (step === 3) {
+      if (!formData.criterios_inclusion.trim()) {
+        newErrors.criterios_inclusion = 'Los criterios de inclusión son obligatorios';
+      }
+      if (!formData.criterios_exclusion.trim()) {
+        newErrors.criterios_exclusion = 'Los criterios de exclusión son obligatorios';
       }
     }
     
@@ -183,13 +189,14 @@ const ProcessManager = () => {
             subpregunta_2: formData.subpregunta_2 || '',
             subpregunta_3: formData.subpregunta_3 || '',
             // Añadir campos obligatorios con valores temporales
-            cadena_busqueda: formData.cadena_busqueda || '(pendiente)', // Campo obligatorio
-            fuentes: formData.fuentes || 'Por definir',
+            cadena_busqueda: '(pendiente)', // Campo obligatorio
+            fuentes: 'Por definir',
             anio_inicio: formData.anio_inicio || 2000,
             anio_final: formData.anio_final || new Date().getFullYear(),
-            criterios_inclusion: formData.criterios_inclusion || 'Por definir',
-            criterios_exclusion: formData.criterios_exclusion || 'Por definir'
+            criterios_inclusion: 'Por definir',
+            criterios_exclusion: 'Por definir'
           };
+          
           console.log('Enviando datos con valores por defecto:', basicData);
           const response = await smsService.createInitialSMS(basicData);
           console.log('SMS creado con éxito:', response);
@@ -203,32 +210,50 @@ const ProcessManager = () => {
           
           // Guardar el ID en localStorage
           localStorage.setItem('sms_id', currentSmsId.toString());
-          localStorage.setItem('sms_draft', JSON.stringify(formData));
-          localStorage.setItem('sms_step', currentStep.toString());
-          
-          // Esperar un momento para asegurar que el estado se actualice
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      
-        // Solo actualizar criterios si tenemos un ID válido
-        if (currentSmsId) {
-          try {
-            await smsService.updateSMSCriteria(currentSmsId, {
-              cadena_busqueda: formData.cadena_busqueda || '(pendiente)',
-              anio_inicio: formData.anio_inicio || 2000,
-              anio_final: formData.anio_final || new Date().getFullYear(),
-            });
-          } catch (error) {
-            console.error('Error al actualizar criterios:', error);
-            throw new Error('Error al actualizar criterios: ' + error.message);
-          }
         } else {
-          throw new Error('No se pudo obtener un ID válido para el SMS');
+          // Si ya existe un ID, actualizar las preguntas
+          await smsService.updateSMSQuestions(currentSmsId, {
+            pregunta_principal: formData.pregunta_principal,
+            subpregunta_1: formData.subpregunta_1 || '',
+            subpregunta_2: formData.subpregunta_2 || '',
+            subpregunta_3: formData.subpregunta_3 || '',
+          });
         }
+        
+        // Avanzar al siguiente paso
+        localStorage.setItem('sms_draft', JSON.stringify(formData));
+        localStorage.setItem('sms_step', "2");
+        setCurrentStep(2);
+        
+      } else if (currentStep === 2) {
+        // En el paso 2, actualizar la cadena de búsqueda y años
+        if (!smsId) {
+          throw new Error('No se encontró un ID válido para el SMS');
+        }
+        
+        // Asegurarse de enviar los valores correctos (convertir a números si es necesario)
+        const criteriaData = {
+          cadena_busqueda: formData.cadena_busqueda.trim(),
+          anio_inicio: Number(formData.anio_inicio),
+          anio_final: Number(formData.anio_final),
+          fuentes: formData.fuentes || 'Por definir'
+        };
+        
+        // Actualizar los criterios de búsqueda
+        await smsService.updateSMSCriteria(smsId, criteriaData);
+        
+        // Avanzar al siguiente paso
+        localStorage.setItem('sms_draft', JSON.stringify(formData));
+        localStorage.setItem('sms_step', "3");
+        setCurrentStep(3);
+        
+      } else {
+        // Si llegamos aquí, avanzamos al siguiente paso (para otros pasos futuros)
+        localStorage.setItem('sms_step', (currentStep + 1).toString());
+        localStorage.setItem('sms_draft', JSON.stringify(formData));
+        setCurrentStep(prev => prev + 1);
       }
       
-      // Si todo va bien, avanzamos al siguiente paso
-      setCurrentStep(prev => prev + 1);
     } catch (error) {
       console.error('Error completo:', error);
       setErrors({ 
@@ -240,6 +265,8 @@ const ProcessManager = () => {
   };
 
   const prevStep = () => {
+    // Guardar el paso anterior en localStorage
+    localStorage.setItem('sms_step', (currentStep - 1).toString());
     setCurrentStep(prev => prev - 1);
   };
 
@@ -255,14 +282,6 @@ const ProcessManager = () => {
         throw new Error('No se encontró el ID del SMS. Por favor, vuelva al inicio del proceso.');
       }
       
-      // Validar que los criterios no estén vacíos
-      if (!formData.criterios_inclusion.trim() || !formData.criterios_exclusion.trim()) {
-        setErrors({
-          general: "Los criterios de inclusión y exclusión son obligatorios"
-        });
-        return;
-      }
-      
       // Guardar criterios de inclusión/exclusión
       await smsService.updateSMSCriteria(smsId, {
         criterios_inclusion: formData.criterios_inclusion.trim(),
@@ -274,6 +293,7 @@ const ProcessManager = () => {
       localStorage.removeItem('sms_step');
       localStorage.removeItem('sms_id');
       
+      // Redirigir a la lista de SMS
       navigate('/sms');
     } catch (error) {
       console.error('Error al guardar criterios:', error);
@@ -315,6 +335,14 @@ const ProcessManager = () => {
         return null;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-base-100 p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
