@@ -4,6 +4,7 @@ from .models import SMS, Article
 
 class SMSSerializer(serializers.ModelSerializer):
     usuario = serializers.ReadOnlyField(source='usuario.username')
+    id = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = SMS
@@ -13,14 +14,17 @@ class SMSSerializer(serializers.ModelSerializer):
                     'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
                     'tipo_registro', 'tipo_tecnica', 'fuentes', 'usuario',
                     'fecha_creacion', 'fecha_actualizacion']
-        read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
+        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
 
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        return instance
 
 class SMSListSerializer(serializers.ModelSerializer):
     """Serializador para listar SMS sin artículos"""
+    id = serializers.IntegerField(read_only=True)
+    
     class Meta:
         model = SMS
         fields = [
@@ -41,12 +45,13 @@ class ArticleSerializer(serializers.ModelSerializer):
 class SMSDetailSerializer(serializers.ModelSerializer):
     """Serializador para ver detalles completos de SMS con sus artículos"""
     articles = ArticleSerializer(many=True, read_only=True)
+    id = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = SMS
         fields = [
             'id', 'titulo_estudio', 'autores', 'pregunta_principal',
-            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',  # Corregir estos campos
+            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',
             'cadena_busqueda', 'anio_inicio', 'anio_final',
             'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
             'tipo_registro', 'tipo_tecnica', 'usuario', 'fecha_creacion',
@@ -55,12 +60,14 @@ class SMSDetailSerializer(serializers.ModelSerializer):
 
 class SMSCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializador para crear y actualizar SMS sin artículos"""
+    id = serializers.IntegerField(read_only=True)
+    
     class Meta:
         model = SMS
         fields = [
-            'titulo_estudio', 'autores', 'pregunta_principal',
-            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',  # Corregir estos campos
+            'id', 'titulo_estudio', 'autores', 'pregunta_principal',
+            'subpregunta_1', 'subpregunta_2', 'subpregunta_3',
             'cadena_busqueda', 'anio_inicio', 'anio_final',
-            'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
-            'tipo_registro', 'tipo_tecnica'
+            'criterios_inclusion', 'criterios_exclusion', 
+            #'enfoque_estudio','tipo_registro', 'tipo_tecnica'
         ]

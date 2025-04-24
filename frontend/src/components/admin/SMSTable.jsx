@@ -61,6 +61,9 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
                                             <Link to={`/sms/${sms.id}/edit`} className="btn btn-sm btn-warning text-white">
                                                 Editar
                                             </Link>
+                                            <Link to={`/sms/${sms.id}/process`} className="btn btn-sm btn-secondary text-white">
+                                                Continuar
+                                            </Link>
                                             <button
                                                 onClick={() => onDelete(sms.id)}
                                                 className="btn btn-sm btn-error text-white"
