@@ -37,7 +37,6 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
                             <th>Título</th>
                             <th>Autores</th>
                             <th>Fecha</th>
-                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -58,7 +57,7 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
                                             <Link to={`/sms/${sms.id}`} className="btn btn-sm btn-info text-white">
                                                 Ver
                                             </Link>
-                                            <Link to={`/sms/${sms.id}/edit`} className="btn btn-sm btn-warning text-white">
+                                            <Link to={`/sms/${sms.id}/process`} className="btn btn-sm btn-secondary text-white">
                                                 Editar
                                             </Link>
                                             <button

@@ -1,10 +1,30 @@
 import React from 'react';
+import { FaQuestionCircle } from 'react-icons/fa';
 
-const QuestionStep = ({ formData, handleChange, errors }) => {
+const QuestionStep= ({ formData, handleChange, errors }) => {
     return (
         <div className="space-y-4">
-        <h2 className="text-xl font-semibold mb-4">Mapeos Sistemáticos</h2>
-        
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">Preguntas de Investigación</h1>
+            <p className="text-muted-foreground">
+                Define las preguntas que guiarán tu revisión sistemática de literatura
+            </p>
+        </div>
+        <div className="bg-white rounded-lg border shadow-sm mb-6">
+                <div className="p-4 bg-gray-100 rounded-t-lg">
+                    <div className="flex items-start gap-2">
+                        <FaQuestionCircle className="h-5 w-5 text-blue-500 mt-1" />
+                        <div>
+                            <h3 className="text-lg font-semibold">Guía para formular preguntas</h3>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Según Barbara Kitchenham, las preguntas de investigación efectivas deben ser claras, específicas, y
+                                estar alineadas con los objetivos del estudio. Utiliza el formato PICOC (Población, Intervención,
+                                Comparación, Resultados, Contexto) cuando sea apropiado.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         <div className="form-control w-full">
             <label className="label">
             <span className="label-text">Título</span>
