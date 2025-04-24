@@ -107,8 +107,37 @@ export const smsService = {
             if (!id) {
                 throw new Error('Se requiere un ID válido para actualizar los criterios');
             }
-            console.log('Actualizando criterios del SMS', id, 'con datos:', criteriaData);
-            const response = await api.post(`/api/sms/sms/${id}/criteria/`, criteriaData);
+            
+            // Asegurar que los datos enviados sean los correctos
+            const cleanCriteriaData = {};
+            
+            // Solo incluir campos que tengan valores válidos
+            if (criteriaData.cadena_busqueda !== undefined && criteriaData.cadena_busqueda !== null) {
+                cleanCriteriaData.cadena_busqueda = criteriaData.cadena_busqueda;
+            }
+            
+            if (criteriaData.anio_inicio !== undefined && criteriaData.anio_inicio !== null) {
+                cleanCriteriaData.anio_inicio = criteriaData.anio_inicio;
+            }
+            
+            if (criteriaData.anio_final !== undefined && criteriaData.anio_final !== null) {
+                cleanCriteriaData.anio_final = criteriaData.anio_final;
+            }
+            
+            if (criteriaData.criterios_inclusion !== undefined && criteriaData.criterios_inclusion !== null) {
+                cleanCriteriaData.criterios_inclusion = criteriaData.criterios_inclusion;
+            }
+            
+            if (criteriaData.criterios_exclusion !== undefined && criteriaData.criterios_exclusion !== null) {
+                cleanCriteriaData.criterios_exclusion = criteriaData.criterios_exclusion;
+            }
+            
+            if (criteriaData.enfoque_estudio !== undefined && criteriaData.enfoque_estudio !== null) {
+                cleanCriteriaData.enfoque_estudio = criteriaData.enfoque_estudio;
+            }
+            
+            console.log('Actualizando criterios del SMS', id, 'con datos:', cleanCriteriaData);
+            const response = await api.post(`/api/sms/sms/${id}/criteria/`, cleanCriteriaData);
             console.log('Respuesta updateSMSCriteria:', response.data);
             return response.data;
         } catch (error) {
