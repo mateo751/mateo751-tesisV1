@@ -1,8 +1,6 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
 import { SMSProvider } from "@/context/SMSContext";
-import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/auth/LoginPage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import SMSList from "@/components/SMS/SMSList";
@@ -32,9 +30,9 @@ function App() {
                   <ProcessManager />
                 </ProtectedRoute>
               } />
-              <Route path="/sms/:id" element={
+              <Route path="/sms/:id/process" element={
                 <ProtectedRoute>
-                  <SMSForm />
+                  <ProcessManager />
                 </ProtectedRoute>
               } />
               <Route path="/sms/:id/edit" element={

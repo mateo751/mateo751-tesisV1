@@ -1,5 +1,4 @@
 import React from 'react';
-
 const StepNavigator = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, isLastStep }) => {
   return (
     <div className="flex justify-between mt-8">
@@ -14,6 +13,11 @@ const StepNavigator = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, 
         </button>
       )}
       
+      {/* Mostrar información de progreso */}
+      <div className="flex items-center mx-2 text-sm text-gray-500">
+        Paso {currentStep} de {totalSteps}
+      </div>
+      
       <div className="ml-auto">
         {!isLastStep ? (
           <button
@@ -22,7 +26,7 @@ const StepNavigator = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, 
             className="btn btn-primary"
             disabled={isSubmitting}
           >
-            Siguiente
+            {isSubmitting ? 'Guardando...' : 'Guardar y Continuar'}
           </button>
         ) : (
           <button
@@ -30,7 +34,7 @@ const StepNavigator = ({ currentStep, totalSteps, onNext, onPrev, isSubmitting, 
             className="btn btn-primary"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Guardando...' : 'Guardar'}
+            {isSubmitting ? 'Guardando...' : 'Finalizar'}
           </button>
         )}
       </div>
