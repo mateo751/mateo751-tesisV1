@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',#JWT
     'rest_framework_simplejwt.token_blacklist',#JWT
     'corsheaders',#CORS
+    'django_extensions',#Extensiones de Django
     'authentication',#Autenticación de usuarios
     'sms'#SMS
 ]
