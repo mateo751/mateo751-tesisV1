@@ -5,6 +5,7 @@ import { smsService } from '@/services/smsService';
 import QuestionStep from '@/components/process/planning/QuestionStep';
 import ScopingStep from '@/components/process/planning/ScopingStep';
 import InclusionStep from '@/components/process/identification/InclusionStep';
+import SourcesStep from '@/components/process/identification/SourcesStep';
 import ProcessTracker from '@/components/process/shared/ProcessTracker';
 import StepNavigator from '@/components/process/shared/StepNavigator';
 
@@ -20,6 +21,7 @@ const initialFormData = {
   cadena_busqueda: '',
   anio_inicio: 2000,
   anio_final: new Date().getFullYear(),
+  // Paso 4: Fuentes de búsqueda
   fuentes: '',
   // Paso 3: Criterios
   criterios_inclusion: '',
@@ -107,7 +109,7 @@ const ProcessManager = () => {
     };
     
     initializeData();
-  }, [id, fetchSMSById]);
+  }, [id, fetchSMSById, dataInitialized]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -162,6 +164,12 @@ const ProcessManager = () => {
       }
       if (!formData.criterios_exclusion.trim()) {
         newErrors.criterios_exclusion = 'Los criterios de exclusión son obligatorios';
+      }
+    }
+    
+    if (step === 4) {
+      if (!formData.fuentes.trim()) {
+        newErrors.fuentes = 'Las fuentes de búsqueda son obligatorias';
       }
     }
     
@@ -226,17 +234,17 @@ const ProcessManager = () => {
         setCurrentStep(2);
         
       } else if (currentStep === 2) {
-        // En el paso 2, actualizar la cadena de búsqueda y años
+        // En el paso 2, actualizar la cadena de búsqueda y años (sin fuentes)
         if (!smsId) {
           throw new Error('No se encontró un ID válido para el SMS');
         }
         
-        // Asegurarse de enviar los valores correctos (convertir a números si es necesario)
+        // Asegurarse de enviar los valores correctos (sin fuentes)
         const criteriaData = {
           cadena_busqueda: formData.cadena_busqueda.trim(),
           anio_inicio: Number(formData.anio_inicio),
-          anio_final: Number(formData.anio_final),
-          fuentes: formData.fuentes || 'Por definir'
+          anio_final: Number(formData.anio_final)
+          // Ya no enviamos fuentes aquí
         };
         
         // Actualizar los criterios de búsqueda
@@ -247,8 +255,25 @@ const ProcessManager = () => {
         localStorage.setItem('sms_step', "3");
         setCurrentStep(3);
         
+      } else if (currentStep === 3) {
+        // En el paso 3, actualizar criterios de inclusión/exclusión
+        if (!smsId) {
+          throw new Error('No se encontró un ID válido para el SMS');
+        }
+        
+        // Guardar criterios
+        await smsService.updateSMSCriteria(smsId, {
+          criterios_inclusion: formData.criterios_inclusion.trim(),
+          criterios_exclusion: formData.criterios_exclusion.trim(),
+        });
+        
+        // Avanzar al paso 4
+        localStorage.setItem('sms_draft', JSON.stringify(formData));
+        localStorage.setItem('sms_step', "4");
+        setCurrentStep(4);
       } else {
-        // Si llegamos aquí, avanzamos al siguiente paso (para otros pasos futuros)
+        // Si llegamos aquí, estamos en un paso no contemplado
+        // (solo por seguridad)
         localStorage.setItem('sms_step', (currentStep + 1).toString());
         localStorage.setItem('sms_draft', JSON.stringify(formData));
         setCurrentStep(prev => prev + 1);
@@ -282,10 +307,9 @@ const ProcessManager = () => {
         throw new Error('No se encontró el ID del SMS. Por favor, vuelva al inicio del proceso.');
       }
       
-      // Guardar criterios de inclusión/exclusión
+      // Guardar fuentes de búsqueda (nuevo paso 4)
       await smsService.updateSMSCriteria(smsId, {
-        criterios_inclusion: formData.criterios_inclusion.trim(),
-        criterios_exclusion: formData.criterios_exclusion.trim(),
+        fuentes: formData.fuentes.trim(),
       });
 
       // Limpiar localStorage
@@ -296,7 +320,7 @@ const ProcessManager = () => {
       // Redirigir a la lista de SMS
       navigate('/sms');
     } catch (error) {
-      console.error('Error al guardar criterios:', error);
+      console.error('Error al guardar fuentes:', error);
       setErrors({ 
         general: "Error al finalizar: " + (error.response?.data?.detail || error.message)
       });
@@ -331,6 +355,14 @@ const ProcessManager = () => {
             errors={errors}
           />
         );
+      case 4:
+        return (
+          <SourcesStep
+            formData={formData}
+            handleChange={handleChange}
+            errors={errors}
+          />
+        );
       default:
         return null;
     }
@@ -350,7 +382,7 @@ const ProcessManager = () => {
         {smsId ? 'Editar Mapeo Sistemático' : 'Nuevo Mapeo Sistemático'}
       </h1>
       
-      <ProcessTracker currentStep={currentStep} totalSteps={3} />
+      <ProcessTracker currentStep={currentStep} totalSteps={4} />
       
       <form onSubmit={handleSubmit}>
         {errors.general && (
@@ -363,11 +395,11 @@ const ProcessManager = () => {
         
         <StepNavigator
           currentStep={currentStep}
-          totalSteps={3}
+          totalSteps={4}
           onNext={nextStep}
           onPrev={prevStep}
           isSubmitting={isSaving}
-          isLastStep={currentStep === 3}
+          isLastStep={currentStep === 4}
         />
       </form>
     </div>
