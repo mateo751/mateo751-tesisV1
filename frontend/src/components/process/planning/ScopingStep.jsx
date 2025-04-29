@@ -64,23 +64,6 @@ const ScopingStep = ({ formData, handleChange, errors }) => {
                     )}
                 </div>
             </div>
-
-            <div className="form-control w-full">
-                <label className="label">
-                    <span className="label-text">Fuentes de búsqueda</span>
-                </label>
-                <textarea
-                    name="fuentes"
-                    value={formData.fuentes || ''}
-                    onChange={handleChange}
-                    className="textarea textarea-bordered w-full"
-                    rows="3"
-                    placeholder="IEEE Xplore, ACM Digital Library, Scopus, Web of Science..."
-                ></textarea>
-                <p className="text-xs text-gray-500 mt-1">
-                    Lista las bases de datos bibliográficas que utilizarás para tu búsqueda
-                </p>
-            </div>
         </div>
     );
 };
