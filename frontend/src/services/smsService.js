@@ -147,6 +147,18 @@ export const smsService = {
         }
     },
 
+    generateSearchQuery: async (title) => {
+        try {
+            console.log('Generando cadena de búsqueda para título:', title);
+            const response = await api.post('/api/sms/sms/generate-search-query/', { titulo: title });
+            console.log('Respuesta generateSearchQuery:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error al generar cadena de búsqueda:', error);
+            throw error;
+        }
+    },
+
     getSMSById: async (id) => {
         try {
             if (!id) {
