@@ -39,6 +39,7 @@ const ProcessManager = () => {
   const { fetchSMSById } = useSMS();
   const [loading, setLoading] = useState(false);
   const [dataInitialized, setDataInitialized] = useState(false);
+  const [searchQuerySuggestion, setSearchQuerySuggestion] = useState(null);
 
   // Cargar datos solo una vez al inicio
   useEffect(() => {
@@ -139,6 +140,19 @@ const ProcessManager = () => {
         ...prev,
         [name]: ''
       }));
+    }
+  };
+
+  // Nuevo manejador para la generación de cadenas de búsqueda
+  const handleSearchQueryGeneration = (result) => {
+    console.log('Resultado de la generación de cadena de búsqueda:', result);
+    
+    // Guardar la sugerencia para mostrarla en el siguiente paso
+    setSearchQuerySuggestion(result);
+    
+    // Movernos al siguiente paso si todo está validado
+    if (validateStep(currentStep)) {
+      nextStep();
     }
   };
 
@@ -290,6 +304,11 @@ const ProcessManager = () => {
   };
 
   const prevStep = () => {
+    // Limpiar la sugerencia de cadena de búsqueda al volver atrás
+    if (currentStep === 2) {
+      setSearchQuerySuggestion(null);
+    }
+    
     // Guardar el paso anterior en localStorage
     localStorage.setItem('sms_step', (currentStep - 1).toString());
     setCurrentStep(prev => prev - 1);
@@ -337,6 +356,7 @@ const ProcessManager = () => {
             formData={formData}
             handleChange={handleChange}
             errors={errors}
+            handleSearchQueryGeneration={handleSearchQueryGeneration}
           />
         );
       case 2:
@@ -345,6 +365,7 @@ const ProcessManager = () => {
             formData={formData}
             handleChange={handleChange}
             errors={errors}
+            searchQuerySuggestion={searchQuerySuggestion}
           />
         );
       case 3:

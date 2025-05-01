@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-import csv
 from django.http import HttpResponse
+import csv
 import io
 
 from .models import SMS, Article
@@ -16,6 +16,7 @@ from .serializers import (
     SMSCreateUpdateSerializer,
     ArticleSerializer
 )
+from .search_utils import extract_keywords_and_synonyms, generate_search_query
 
 class SMSViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar SMS (Systematic Mapping Study)"""
@@ -107,6 +108,43 @@ class SMSViewSet(viewsets.ModelViewSet):
         
         sms.save()
         return Response(SMSDetailSerializer(sms).data)
+    
+    @action(detail=False, methods=['post'], url_path='generate-search-query')
+    def generate_search_query(self, request):
+        """
+        Endpoint para generar una cadena de búsqueda basada en el título
+        POST /api/sms/sms/generate-search-query/
+        
+        Espera un JSON con el título:
+        {
+            "titulo": "..."
+        }
+        """
+        if 'titulo' not in request.data or not request.data['titulo'].strip():
+            return Response(
+                {"detail": "Se requiere un título válido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        titulo = request.data['titulo']
+        
+        try:
+            # Extraer palabras clave y generar sinónimos
+            keywords_dict = extract_keywords_and_synonyms(titulo, min_terms=5, synonyms_per_term=2)
+            
+            # Generar la cadena de búsqueda
+            search_query = generate_search_query(keywords_dict)
+            
+            return Response({
+                "keywords": keywords_dict,
+                "search_query": search_query
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"detail": f"Error al generar la cadena de búsqueda: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['post'], url_path='articles/import')
     def import_articles(self, request, pk=None):
