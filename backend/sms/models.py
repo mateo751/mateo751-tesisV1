@@ -54,8 +54,10 @@ class Article(models.Model):
     anio_publicacion = models.IntegerField()
     doi = models.CharField(max_length=100, blank=True, null=True)
     url = models.URLField(blank=True, null=True)
-    
-    # Clasificación del artículo
+    journal = models.CharField(max_length=255, blank=True, null=True, verbose_name="Revista")
+    respuesta_subpregunta_1 = models.TextField(blank=True, null=True, verbose_name="Respuesta a subpregunta 1")
+    respuesta_subpregunta_2 = models.TextField(blank=True, null=True, verbose_name="Respuesta a subpregunta 2")
+    respuesta_subpregunta_3 = models.TextField(blank=True, null=True, verbose_name="Respuesta a subpregunta 3")
     enfoque = models.CharField(max_length=100)
     tipo_registro = models.CharField(max_length=100)
     tipo_tecnica = models.CharField(max_length=100, blank=True, null=True)

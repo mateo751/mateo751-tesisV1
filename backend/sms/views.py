@@ -7,6 +7,9 @@ from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 import csv
 import io
+import os
+import tempfile
+import traceback
 
 from .models import SMS, Article
 from .serializers import (
@@ -17,6 +20,14 @@ from .serializers import (
     ArticleSerializer
 )
 from .search_utils import extract_keywords_and_synonyms, generate_search_query
+from .science_parse import setup_science_parse, extract_pdf_metadata, analyze_with_chatgpt
+
+# Intenta configurar Science-Parse al iniciar
+try:
+    setup_science_parse()
+except Exception as e:
+    print(f"Advertencia: No se pudo configurar Science-Parse automáticamente: {e}")
+    print("Esto no impedirá que la aplicación funcione, pero deberás configurar Science-Parse manualmente.")
 
 class SMSViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar SMS (Systematic Mapping Study)"""
@@ -90,7 +101,9 @@ class SMSViewSet(viewsets.ModelViewSet):
             'criterios_exclusion',
             'enfoque_estudio',
             'anio_inicio',
-            'anio_final'
+            'anio_final',
+            'cadena_busqueda',
+            'fuentes'
         ]
         
         # Filtramos solo los campos relacionados con criterios
@@ -247,8 +260,12 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        valid_states = ['selected', 'rejected', 'pending']
-        if request.data['estado'] not in valid_states:
+        valid_states = ['SELECTED', 'REJECTED', 'PENDING']
+        
+        # Convertir a mayúsculas para hacer coincidir con los valores de la base de datos
+        estado = request.data['estado'].upper()
+        
+        if estado not in valid_states:
             return Response(
                 {"detail": f"El estado debe ser uno de: {', '.join(valid_states)}"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -277,7 +294,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
         # Filtramos los artículos según el estado solicitado
         queryset = self.get_queryset()
         if state_filter != 'all':
-            queryset = queryset.filter(estado=state_filter)
+            queryset = queryset.filter(estado=state_filter.upper())
         
         # Para formato JSON, simplemente serializamos y devolvemos
         if export_format == 'json':
@@ -322,4 +339,148 @@ class ArticleViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": "Formato de exportación no válido. Use 'csv' o 'json'."},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['POST'], url_path='analyze-pdfs')
+    def analyze_pdfs(self, request, sms_pk=None):
+        """
+        Analiza los PDFs cargados para extraer metadatos y hacer análisis con ChatGPT
+        """
+        try:
+            # Obtener el SMS
+            sms = self.get_sms()
+            
+            # Obtener las subpreguntas para el análisis de ChatGPT
+            subquestions = []
+            
+            # Añadir pregunta principal si existe
+            if sms.pregunta_principal and sms.pregunta_principal.strip():
+                subquestions.append(sms.pregunta_principal)
+            
+            # Añadir subpreguntas si existen
+            if sms.subpregunta_1 and sms.subpregunta_1.strip():
+                subquestions.append(sms.subpregunta_1)
+            if sms.subpregunta_2 and sms.subpregunta_2.strip():
+                subquestions.append(sms.subpregunta_2)
+            if sms.subpregunta_3 and sms.subpregunta_3.strip():
+                subquestions.append(sms.subpregunta_3)
+            
+            # Si no hay subpreguntas, crear algunas por defecto
+            if not subquestions:
+                subquestions = [
+                    "¿Cuál es el principal hallazgo del estudio?",
+                    "¿Qué metodología se utilizó?",
+                    "¿Cuáles son las principales conclusiones?"
+                ]
+                
+            print(f"Subpreguntas a analizar: {subquestions}")  # Debug
+            
+            # Obtener los archivos del request
+            files = request.FILES.getlist('files')
+            if not files:
+                return Response({"error": "No se han proporcionado archivos"}, 
+                            status=status.HTTP_400_BAD_REQUEST)
+            
+            results = []
+            for file in files:
+                # Guardar el archivo temporalmente
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp:
+                    for chunk in file.chunks():
+                        temp.write(chunk)
+                    temp_path = temp.name
+                
+                try:
+                    # Extraer metadatos
+                    metadata = extract_pdf_metadata(temp_path)
+                    
+                    # Analizar con ChatGPT para responder subpreguntas
+                    analysis_results = analyze_with_chatgpt(metadata, subquestions)
+                    
+                    # Crear o actualizar el artículo en la base de datos
+                    article_data = {
+                        'sms': sms,
+                        'titulo': metadata['title'],
+                        'autores': metadata['authors'],
+                        'anio_publicacion': metadata['year'] or 2023,  # Valor por defecto
+                        'doi': metadata['doi'],
+                        'resumen': metadata['abstract'],
+                        'journal': metadata.get('journal', 'Sin revista'),
+                        'enfoque': request.data.get('enfoque', 'No especificado'),
+                        'tipo_registro': request.data.get('tipo_registro', 'No especificado'),
+                        'tipo_tecnica': request.data.get('tipo_tecnica', 'No especificado'),
+                        'notas': analysis_results.get('analysis', ''),
+                        'estado': 'PENDING',
+                        # Aseguramos que siempre haya respuestas a las subpreguntas
+                        'respuesta_subpregunta_1': analysis_results.get('subpregunta_1', 'Respuesta pendiente de análisis'),
+                        'respuesta_subpregunta_2': analysis_results.get('subpregunta_2', 'Respuesta pendiente de análisis'),
+                        'respuesta_subpregunta_3': analysis_results.get('subpregunta_3', 'Respuesta pendiente de análisis')
+                    }
+                    
+                    # Crear el artículo
+                    article = Article.objects.create(**article_data)
+                    
+                    # Preparar el resultado combinando metadatos y respuestas a subpreguntas
+                    result = {
+                        'id': article.id,
+                        'title': metadata['title'],
+                        'authors': metadata['authors'],
+                        'year': metadata['year'],
+                        'journal': metadata.get('journal', 'Sin revista'),
+                        'doi': metadata['doi'],
+                        'res_subpregunta_1': article_data['respuesta_subpregunta_1'],
+                        'res_subpregunta_2': article_data['respuesta_subpregunta_2'],
+                        'res_subpregunta_3': article_data['respuesta_subpregunta_3'],
+                        'analysis': analysis_results.get('analysis', 'Análisis pendiente')
+                    }
+                    
+                    results.append(result)
+                    
+                finally:
+                    # Limpiar el archivo temporal
+                    if os.path.exists(temp_path):
+                        os.unlink(temp_path)
+            
+            return Response({
+                'results': results,
+                'message': f"Se analizaron {len(results)} archivos correctamente"
+            })
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"error": f"Error al analizar los PDFs: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['GET'], url_path='get-article-details')
+    def get_article_details(self, request, pk=None):
+        """
+        Obtiene los detalles de un artículo en el formato específico solicitado
+        """
+        try:
+            article = self.get_object()
+            
+            response_data = {
+                "title": article.titulo,
+                "authors": article.autores,
+                "year": article.anio_publicacion,
+                "journal": article.journal or "Sin revista",
+                "doi": article.doi or "Sin DOI",
+                "res_subpregunta_1": article.respuesta_subpregunta_1 or "Respuesta corta a la primera subpregunta",
+                "res_subpregunta_2": article.respuesta_subpregunta_2 or "Respuesta corta a la segunda subpregunta",
+                "res_subpregunta_3": article.respuesta_subpregunta_3 or "Respuesta corta a la tercera subpregunta"
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Article.DoesNotExist:
+            return Response(
+                {"error": "Artículo no encontrado"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
