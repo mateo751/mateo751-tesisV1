@@ -7,13 +7,14 @@ class SMSSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     
     class Meta:
-        model = SMS
-        fields = [  'id', 'titulo_estudio', 'autores', 'pregunta_principal', 
-                    'subpregunta_1', 'subpregunta_2', 'subpregunta_3', 
-                    'cadena_busqueda', 'anio_inicio', 'anio_final',
-                    'criterios_inclusion', 'criterios_exclusion', 'enfoque_estudio',
-                    'tipo_registro', 'tipo_tecnica', 'fuentes', 'usuario',
-                    'fecha_creacion', 'fecha_actualizacion']
+        model = Article
+        fields = [
+            'id', 'titulo', 'autores', 'anio_publicacion', 'resumen', 
+            'palabras_clave', 'doi', 'url', 'journal',
+            'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 'respuesta_subpregunta_3',
+            'enfoque', 'tipo_registro', 'tipo_tecnica', 'estado', 'notas',
+            'fecha_creacion', 'fecha_actualizacion'
+        ]
         read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
 
     def create(self, validated_data):
