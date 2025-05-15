@@ -285,16 +285,25 @@ class ArticleViewSet(viewsets.ModelViewSet):
         Parámetros de consulta opcionales:
         - format: csv (default) | json
         - state: selected (default) | rejected | pending | all
+        - ids: lista de IDs separados por comas para exportar artículos específicos
         """
         # Obtener el formato de exportación
         export_format = request.query_params.get('format', 'csv')
         # Obtener el estado de filtrado
         state_filter = request.query_params.get('state', 'selected')
+        # Obtener IDs específicos si se proporcionan
+        article_ids = request.query_params.get('ids', None)
         
         # Filtramos los artículos según el estado solicitado
         queryset = self.get_queryset()
         if state_filter != 'all':
             queryset = queryset.filter(estado=state_filter.upper())
+        
+        # Si se proporcionan IDs específicos, filtrar por ellos
+        if article_ids:
+            ids_list = [int(x) for x in article_ids.split(',') if x.isdigit()]
+            if ids_list:
+                queryset = queryset.filter(id__in=ids_list)
         
         # Para formato JSON, simplemente serializamos y devolvemos
         if export_format == 'json':
@@ -309,9 +318,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
             
             # Escribimos el encabezado
             headers = [
-                'ID', 'Título', 'Autores', 'Año', 'Resumen', 
+                'ID', 'Título', 'Autores', 'Año', 'Revista/Journal', 'Resumen', 
                 'Palabras Clave', 'DOI', 'URL', 'Enfoque', 
-                'Tipo de Registro', 'Tipo de Técnica', 'Estado', 'Notas'
+                'Tipo de Registro', 'Tipo de Técnica', 'Estado', 'Notas',
+                'Respuesta Subpregunta 1', 'Respuesta Subpregunta 2', 'Respuesta Subpregunta 3'
             ]
             writer.writerow(headers)
             
@@ -319,9 +329,10 @@ class ArticleViewSet(viewsets.ModelViewSet):
             for article in queryset:
                 row = [
                     article.id, article.titulo, article.autores, article.anio_publicacion,
-                    article.resumen, article.palabras_clave, article.doi,
+                    article.journal, article.resumen, article.palabras_clave, article.doi,
                     article.url, article.enfoque, article.tipo_registro,
-                    article.tipo_tecnica, article.estado, article.notas
+                    article.tipo_tecnica, article.estado, article.notas,
+                    article.respuesta_subpregunta_1, article.respuesta_subpregunta_2, article.respuesta_subpregunta_3
                 ]
                 writer.writerow(row)
             
