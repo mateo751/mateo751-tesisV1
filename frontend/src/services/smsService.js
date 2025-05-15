@@ -135,6 +135,10 @@ export const smsService = {
             if (criteriaData.enfoque_estudio !== undefined && criteriaData.enfoque_estudio !== null) {
                 cleanCriteriaData.enfoque_estudio = criteriaData.enfoque_estudio;
             }
+            // Esta línea falta en la función updateSMSCriteria
+            if (criteriaData.fuentes !== undefined && criteriaData.fuentes !== null) {
+                cleanCriteriaData.fuentes = criteriaData.fuentes;
+            }
             
             console.log('Actualizando criterios del SMS', id, 'con datos:', cleanCriteriaData);
             const response = await api.post(`/api/sms/sms/${id}/criteria/`, cleanCriteriaData);
@@ -217,6 +221,79 @@ export const smsService = {
                 window.location.href = '/auth/login';
             }
             throw error;
+        }
+    },
+    // En src/services/smsService.js, añade esta función
+    analyzePDFs: async (smsId, pdfFiles) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+
+            // Crear un objeto FormData para enviar los archivos
+            const formData = new FormData();
+            
+            // Añadir cada archivo PDF al FormData
+            pdfFiles.forEach(file => {
+                formData.append('files', file.file);
+            });
+            
+            // Añadir otros campos si es necesario
+            formData.append('enfoque', 'No especificado');
+            formData.append('tipo_registro', 'No especificado');
+            formData.append('tipo_tecnica', 'No especificado');
+            
+            // Configurar headers específicos para FormData
+            const config = {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            };
+            
+            console.log('Enviando PDFs para análisis:', pdfFiles.length, 'archivos');
+            const response = await api.post(`/api/sms/sms/${smsId}/articles/analyze-pdfs/`, formData, config);
+            console.log('Respuesta analyze-pdfs:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error al analizar PDFs:', error);
+            throw new Error(error.response?.data?.error || 'Error al analizar los PDFs');
+        }
+    },
+    // Exportar artículos de un SMS
+    exportArticles: async (smsId, articleIds = []) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+
+            // Construir la URL correcta según la estructura del backend
+            let url = `/api/sms/sms/${smsId}/articles/export/`;
+            
+            // Añadir parámetros de consulta
+            const params = new URLSearchParams();
+            params.append('format', 'csv');
+            
+            // Si hay IDs específicos, añadirlos como parámetro
+            if (articleIds.length > 0) {
+                params.append('ids', articleIds.join(','));
+            } else {
+                // Si no hay IDs específicos, exportar todos los artículos
+                params.append('state', 'all');
+            }
+            
+            url += `?${params.toString()}`;
+            
+            console.log('URL de exportación:', url); // Para depuración
+            
+            // Configurar para recibir blob en lugar de JSON
+            const response = await api.get(url, {
+                responseType: 'blob'
+            });
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al exportar artículos:', error);
+            throw new Error(error.response?.data?.error || 'Error al exportar los artículos');
         }
     },
 };

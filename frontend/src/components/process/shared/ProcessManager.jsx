@@ -6,6 +6,7 @@ import QuestionStep from '@/components/process/planning/QuestionStep';
 import ScopingStep from '@/components/process/planning/ScopingStep';
 import InclusionStep from '@/components/process/identification/InclusionStep';
 import SourcesStep from '@/components/process/identification/SourcesStep';
+import ExtractionStep from '@/components/process/extraction/ExtractionStep';
 import ProcessTracker from '@/components/process/shared/ProcessTracker';
 import StepNavigator from '@/components/process/shared/StepNavigator';
 
@@ -26,6 +27,8 @@ const initialFormData = {
   // Paso 3: Criterios
   criterios_inclusion: '',
   criterios_exclusion: '',
+  // Paso 4: PDFs
+  pdfFiles: [],
 };
 
 const ProcessManager = () => {
@@ -40,6 +43,7 @@ const ProcessManager = () => {
   const [loading, setLoading] = useState(false);
   const [dataInitialized, setDataInitialized] = useState(false);
   const [searchQuerySuggestion, setSearchQuerySuggestion] = useState(null);
+  const [analyzedResults, setAnalyzedResults] = useState(null);
 
   // Cargar datos solo una vez al inicio
   useEffect(() => {
@@ -76,6 +80,7 @@ const ProcessManager = () => {
                 ? data.criterios_inclusion : '',
               criterios_exclusion: data.criterios_exclusion && data.criterios_exclusion !== 'Por definir' 
                 ? data.criterios_exclusion : '',
+              pdfFiles: formData.pdfFiles || [],
             });
             
             if (savedStep) {
@@ -110,7 +115,7 @@ const ProcessManager = () => {
     };
     
     initializeData();
-  }, [id, fetchSMSById, dataInitialized]);
+  }, [id, fetchSMSById, dataInitialized, formData.pdfFiles]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -182,8 +187,15 @@ const ProcessManager = () => {
     }
     
     if (step === 4) {
-      if (!formData.fuentes.trim()) {
-        newErrors.fuentes = 'Las fuentes de búsqueda son obligatorias';
+      if (!formData.pdfFiles || formData.pdfFiles.length === 0) {
+        newErrors.pdfFiles = 'Debe cargar al menos un PDF';
+      }
+    }
+    
+    if (step === 5) {
+      // Para el paso 5, podríamos requerir que se hayan analizado los PDFs
+      if (!analyzedResults || analyzedResults.length === 0) {
+        newErrors.extraction = 'Debe analizar al menos un PDF antes de continuar';
       }
     }
     
@@ -285,6 +297,32 @@ const ProcessManager = () => {
         localStorage.setItem('sms_draft', JSON.stringify(formData));
         localStorage.setItem('sms_step', "4");
         setCurrentStep(4);
+      } else if (currentStep === 4) {
+        // En el paso 4, guardar fuentes y avanzar al paso 5 (extracción)
+        if (!smsId) {
+          throw new Error('No se encontró un ID válido para el SMS');
+        }
+
+        // Guardar fuentes
+        await smsService.updateSMSCriteria(smsId, {
+          fuentes: formData.fuentes.trim(),
+        });
+
+        // Avanzar al paso 5
+        localStorage.setItem('sms_draft', JSON.stringify(formData));
+        localStorage.setItem('sms_step', "5");
+        setCurrentStep(5);
+      } else if (currentStep === 5) {
+        // En el paso 5, ya hemos procesado los PDFs,
+        // así que podemos finalizar directamente
+
+        // Limpiar localStorage
+        localStorage.removeItem('sms_draft');
+        localStorage.removeItem('sms_step');
+        localStorage.removeItem('sms_id');
+        
+        // Redirigir a la lista de SMS
+        navigate('/sms');
       } else {
         // Si llegamos aquí, estamos en un paso no contemplado
         // (solo por seguridad)
@@ -326,10 +364,8 @@ const ProcessManager = () => {
         throw new Error('No se encontró el ID del SMS. Por favor, vuelva al inicio del proceso.');
       }
       
-      // Guardar fuentes de búsqueda (nuevo paso 4)
-      await smsService.updateSMSCriteria(smsId, {
-        fuentes: formData.fuentes.trim(),
-      });
+      // En el paso 5, ya hemos procesado los PDFs,
+      // así que podemos finalizar directamente
 
       // Limpiar localStorage
       localStorage.removeItem('sms_draft');
@@ -339,7 +375,7 @@ const ProcessManager = () => {
       // Redirigir a la lista de SMS
       navigate('/sms');
     } catch (error) {
-      console.error('Error al guardar fuentes:', error);
+      console.error('Error al finalizar:', error);
       setErrors({ 
         general: "Error al finalizar: " + (error.response?.data?.detail || error.message)
       });
@@ -384,6 +420,15 @@ const ProcessManager = () => {
             errors={errors}
           />
         );
+      case 5:
+        return (
+          <ExtractionStep
+            formData={formData}
+            smsId={smsId}
+            analyzedResults={analyzedResults}
+            onAnalyzeComplete={(results) => setAnalyzedResults(results)}
+          />
+        );
       default:
         return null;
     }
@@ -391,23 +436,23 @@ const ProcessManager = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-12 h-12 border-t-2 border-b-2 rounded-full animate-spin border-primary"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-base-100 p-6 rounded-lg shadow-lg max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6 text-center">
+    <div className="max-w-4xl p-6 mx-auto rounded-lg shadow-lg bg-base-100">
+      <h1 className="mb-6 text-2xl font-bold text-center">
         {smsId ? 'Editar Mapeo Sistemático' : 'Nuevo Mapeo Sistemático'}
       </h1>
       
-      <ProcessTracker currentStep={currentStep} totalSteps={4} />
+      <ProcessTracker currentStep={currentStep} totalSteps={5} />
       
       <form onSubmit={handleSubmit}>
         {errors.general && (
-          <div className="alert alert-error mb-4">
+          <div className="mb-4 alert alert-error">
             <p>{errors.general}</p>
           </div>
         )}
@@ -416,11 +461,11 @@ const ProcessManager = () => {
         
         <StepNavigator
           currentStep={currentStep}
-          totalSteps={4}
+          totalSteps={5}
           onNext={nextStep}
           onPrev={prevStep}
           isSubmitting={isSaving}
-          isLastStep={currentStep === 4}
+          isLastStep={currentStep === 5}
         />
       </form>
     </div>
