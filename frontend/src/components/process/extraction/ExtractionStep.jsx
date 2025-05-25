@@ -155,6 +155,7 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
                                 <th>título</th>
                                 <th>Autores</th>
                                 <th>Año</th>
+                                <th>DOI</th>
                                 <th>Enfoque del estudio</th>
                                 <th>Tipo de registro</th>
                                 <th>Tipo de técnica</th>
@@ -167,9 +168,10 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
                                     <td>{result.title}</td>
                                     <td>{result.authors}</td>
                                     <td>{result.year || "N/A"}</td>
-                                    <td>{result.res_subpregunta_1 || "Prueba 1"}</td>
-                                    <td>{result.res_subpregunta_2 || "Prueba 1"}</td>
-                                    <td>{result.res_subpregunta_3 || "Prueba 1"}</td>
+                                    <td>{result.doi || "N/A"}</td>
+                                    <td>{result.res_subpregunta_1 || "N/A"}</td>
+                                    <td>{result.res_subpregunta_2 || "N/A"}</td>
+                                    <td>{result.res_subpregunta_3 || "N/A"}</td>
                                     <td>
                                         <button 
                                             className="btn btn-circle btn-ghost btn-sm"

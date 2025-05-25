@@ -1,15 +1,12 @@
 import os
-import subprocess
 import json
-import tempfile
-import requests
 import traceback
 import re
 from openai import OpenAI
 from django.conf import settings
 
 # Instalar estas dependencias si no están ya instaladas
-# pip install pdfminer.six PyPDF2
+# pip install pdfminer.six PyPDF2 PyMuPDF habanero
 
 # Importar extractores de texto de PDF
 try:
@@ -26,44 +23,57 @@ except ImportError:
     PYPDF2_AVAILABLE = False
     print("PyPDF2 no está instalado. La extracción de texto puede ser limitada.")
 
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    print("PyMuPDF no está instalado. La extracción de texto puede ser limitada.")
+
+try:
+    import habanero
+    HABANERO_AVAILABLE = True
+except ImportError:
+    HABANERO_AVAILABLE = False
+    print("Habanero no está instalado. No se podrá consultar CrossRef.")
+
 # Configurar el cliente de OpenAI
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Configuración para Science-Parse
-SCIENCE_PARSE_URL = "http://localhost:8080/v1"  # Asumiendo que Science-Parse corre en este puerto
 
 def setup_science_parse():
-    """Verifica si Science-Parse está instalado, de lo contrario lo instala"""
-    try:
-        # Verificar si Docker está instalado
-        subprocess.run(["docker", "--version"], check=True, stdout=subprocess.PIPE)
-        
-        # Verificar si el contenedor Science-Parse está corriendo
-        result = subprocess.run(["docker", "ps", "-q", "--filter", "name=science-parse"], 
-                            check=True, stdout=subprocess.PIPE)
-        
-        if not result.stdout:
-            print("Science-Parse no está corriendo. Intentando iniciar...")
-            # Intentar iniciar el contenedor existente
-            start_result = subprocess.run(["docker", "start", "science-parse"], 
-                                    stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-            
-            # Si el contenedor no existe, crearlo
-            if start_result.returncode != 0:
-                print("Creando nuevo contenedor Science-Parse...")
-                subprocess.run([
-                    "docker", "run", "-d", "--name", "science-parse", "-p", "8080:8080", 
-                    "allenai/science-parse:2.0.3"
-                ], check=True)
-            
-            print("Science-Parse está corriendo en localhost:8080")
-        else:
-            print("Science-Parse ya está corriendo")
-            
-    except Exception as e:
-        print(f"Error al configurar Science-Parse: {e}")
-        print("Asegúrate de tener Docker instalado y funcionando")
-        raise
+    """
+    Función de configuración simplificada sin Science-Parse
+    """
+    print("Inicializando sistema de extracción de metadatos PDF...")
+    
+    available_extractors = []
+    if PDFMINER_AVAILABLE:
+        available_extractors.append("pdfminer.six")
+    if PYPDF2_AVAILABLE:
+        available_extractors.append("PyPDF2")
+    if PYMUPDF_AVAILABLE:
+        available_extractors.append("PyMuPDF")
+    
+    if available_extractors:
+        print(f"Extractores disponibles: {', '.join(available_extractors)}")
+    else:
+        print("ADVERTENCIA: No hay extractores de PDF disponibles")
+        return False
+    
+    if HABANERO_AVAILABLE:
+        print("CrossRef disponible para consultas de metadatos")
+    else:
+        print("ADVERTENCIA: CrossRef no disponible")
+    
+    if os.environ.get("OPENAI_API_KEY"):
+        print("OpenAI API configurada")
+    else:
+        print("ADVERTENCIA: OpenAI API no configurada")
+    
+    print("Setup completado exitosamente.")
+    return True
+
 
 def extract_text_with_pdfminer(pdf_file_path):
     """Extrae texto de un PDF usando pdfminer.six"""
@@ -76,6 +86,7 @@ def extract_text_with_pdfminer(pdf_file_path):
     except Exception as e:
         print(f"Error al extraer texto con pdfminer: {e}")
         return "No se pudo extraer texto del PDF con pdfminer"
+
 
 def extract_text_from_pdf(pdf_file_path):
     """Extrae texto de un PDF usando PyPDF2"""
@@ -96,6 +107,131 @@ def extract_text_from_pdf(pdf_file_path):
     except Exception as e:
         print(f"Error al extraer texto con PyPDF2: {e}")
         return "No se pudo extraer texto del PDF con PyPDF2"
+
+
+def extract_text_with_pymupdf(pdf_file_path):
+    """Extrae texto y metadatos con PyMuPDF (más potente que pdfminer)"""
+    if not PYMUPDF_AVAILABLE:
+        return None
+        
+    try:
+        doc = fitz.open(pdf_file_path)
+        
+        # Extraer metadatos del documento
+        metadata = doc.metadata
+        
+        # Extraer texto de las primeras páginas
+        text = ""
+        # Extraer texto de portada, abstract y algunas páginas iniciales
+        pages_to_extract = min(5, doc.page_count)
+        for i in range(pages_to_extract):
+            page = doc[i]
+            text += page.get_text()
+        
+        return {
+            'metadata': metadata,
+            'text': text
+        }
+    except Exception as e:
+        print(f"Error al extraer texto con PyMuPDF: {e}")
+        return None
+
+
+def extract_doi_from_text(text):
+    """Extrae DOI del texto usando expresiones regulares"""
+    # Patrón DOI: 10.XXXX/cualquier.cosa
+    doi_pattern = r'\b(10\.\d{4,}(?:\.\d+)*\/(?:(?!["&\'])\S)+)\b'
+    doi_match = re.search(doi_pattern, text)
+    if doi_match:
+        return doi_match.group(1)
+    return None
+
+
+def get_metadata_from_crossref(doi=None, title=None):
+    """Obtiene metadatos completos desde CrossRef usando DOI o título"""
+    if not HABANERO_AVAILABLE:
+        return None
+        
+    try:
+        cr = habanero.Crossref()
+        
+        if doi:
+            # Buscar por DOI (más preciso)
+            try:
+                result = cr.works(ids=doi)
+                if 'message' in result:
+                    return parse_crossref_result(result['message'])
+            except Exception as e:
+                print(f"Error consultando CrossRef por DOI: {e}")
+        
+        if title:
+            # Buscar por título como fallback
+            try:
+                results = cr.works(query=title, limit=1)
+                if results and 'message' in results and 'items' in results['message'] and results['message']['items']:
+                    return parse_crossref_result(results['message']['items'][0])
+            except Exception as e:
+                print(f"Error consultando CrossRef por título: {e}")
+                
+        return None
+    except Exception as e:
+        print(f"Error general al consultar CrossRef: {e}")
+        return None
+        
+
+def parse_crossref_result(item):
+    """Parsea el resultado de CrossRef a nuestro formato de metadatos"""
+    try:
+        # Extraer autores
+        authors = []
+        if 'author' in item:
+            for author in item['author']:
+                if 'given' in author and 'family' in author:
+                    authors.append(f"{author['given']} {author['family']}")
+                elif 'name' in author:
+                    authors.append(author['name'])
+        
+        # Extraer año de publicación
+        year = None
+        if 'published-print' in item and 'date-parts' in item['published-print'] and item['published-print']['date-parts']:
+            year = item['published-print']['date-parts'][0][0] if item['published-print']['date-parts'][0] else None
+        elif 'published-online' in item and 'date-parts' in item['published-online'] and item['published-online']['date-parts']:
+            year = item['published-online']['date-parts'][0][0] if item['published-online']['date-parts'][0] else None
+        elif 'created' in item and 'date-parts' in item['created'] and item['created']['date-parts']:
+            year = item['created']['date-parts'][0][0] if item['created']['date-parts'][0] else None
+        
+        # Extraer título
+        title = ''
+        if 'title' in item:
+            if isinstance(item['title'], list) and item['title']:
+                title = item['title'][0]
+            else:
+                title = item['title']
+        
+        # Extraer revista
+        journal = ''
+        if 'container-title' in item:
+            if isinstance(item['container-title'], list) and item['container-title']:
+                journal = item['container-title'][0]
+            else:
+                journal = item['container-title']
+        
+        # Construir objeto de metadatos
+        metadata = {
+            'title': title,
+            'authors': ', '.join(authors) if authors else 'No disponible',
+            'year': year,
+            'journal': journal,
+            'doi': item.get('DOI', ''),
+            'abstract': item.get('abstract', '')
+        }
+        
+        return metadata
+    except Exception as e:
+        print(f"Error al parsear resultado de CrossRef: {e}")
+        traceback.print_exc()
+        return None
+
 
 def analyze_pdf_with_chatgpt(pdf_text, file_name):
     """Usa ChatGPT para extraer metadatos del PDF"""
@@ -123,7 +259,7 @@ def analyze_pdf_with_chatgpt(pdf_text, file_name):
         {{
             "title": "Título extraído",
             "authors": "Autor1, Autor2, etc",
-            "year": 2023,  # o null si no se encuentra
+            "year": 2023,
             "journal": "Nombre de la revista",
             "doi": "Número DOI o URL",
             "abstract": "Texto del resumen..."
@@ -182,122 +318,128 @@ def analyze_pdf_with_chatgpt(pdf_text, file_name):
             'abstract': pdf_text[:500] if pdf_text else 'Error en extracción con IA'
         }
 
-def extract_pdf_metadata(pdf_file_path):
-    """Extrae metadatos de un PDF usando Science-Parse con fallback a ChatGPT"""
+
+def extract_pdf_metadata_enhanced(pdf_file_path):
+    """Flujo mejorado para extraer metadatos de PDFs académicos sin Science-Parse"""
     try:
-        print(f"Intentando extraer metadatos de: {pdf_file_path}")
+        print(f"Iniciando extracción mejorada de: {pdf_file_path}")
         
-        # Intento 1: Science-Parse
-        with open(pdf_file_path, 'rb') as f:
-            files = {'file': f}
-            response = requests.post(f"{SCIENCE_PARSE_URL}", files=files, timeout=30)
-            
-        print(f"Science-Parse - Código de estado HTTP: {response.status_code}")
+        # 1. Intento rápido con PyMuPDF para obtener texto y metadatos básicos
+        extracted_text = ""
+        if PYMUPDF_AVAILABLE:
+            pymupdf_result = extract_text_with_pymupdf(pdf_file_path)
+            if pymupdf_result:
+                extracted_text = pymupdf_result.get('text', '')
+                print(f"Texto extraído con PyMuPDF: {len(extracted_text)} caracteres")
         
-        if response.status_code != 200:
-            raise Exception(f"Error en Science-Parse: {response.status_code} {response.text}")
+        # Si PyMuPDF no está disponible o falla, intentar con otros extractores
+        if not extracted_text and PDFMINER_AVAILABLE:
+            extracted_text = extract_text_with_pdfminer(pdf_file_path)
+            print(f"Texto extraído con pdfminer: {len(extracted_text)} caracteres")
             
-        data = response.json()
-        print(f"Science-Parse - Datos extraídos: {data.keys()}")
+        if not extracted_text and PYPDF2_AVAILABLE:
+            extracted_text = extract_text_from_pdf(pdf_file_path)
+            print(f"Texto extraído con PyPDF2: {len(extracted_text)} caracteres")
         
-        # Manejo robusto de los campos de Science-Parse
-        title = data.get('title', '')
-        if not title or title == "null":
-            title = os.path.basename(pdf_file_path)
-            
-        # Procesar los autores correctamente
-        authors = data.get('authors', [])
-        # Manejo de diferentes formatos de autores
-        if not authors:
-            author_names = "Autor desconocido"
-        elif isinstance(authors, list):
-            if len(authors) > 0 and isinstance(authors[0], dict):
-                # Si son diccionarios, extraer el campo 'name'
-                author_names = ", ".join([author.get('name', 'Desconocido') for author in authors])
-            else:
-                author_names = ", ".join([str(author) for author in authors])
-        else:
-            author_names = str(authors)
-            
-        # Extraer año
-        year = data.get('year')
-        if not year or year == 0:
-            year = None
-            
-        # Extraer revista
-        journal = data.get('venue', '')
-        if not journal:
-            journal = data.get('journalName', '')
-        if not journal or journal == "null":
-            journal = "Sin revista"
-            
-        # Extraer DOI
-        doi = data.get('doi', '')
-        if not doi or doi == "null":
-            doi = "Sin DOI"
-            
-        # Extraer resumen
-        abstract = data.get('abstractText', '')
-        if not abstract or abstract == "null":
-            # Intentar extraer texto de las primeras páginas
-            if 'text' in data:
-                abstract = data['text'][:500] + "..." if len(data['text']) > 500 else data['text']
-            else:
-                abstract = "Sin resumen disponible"
+        # 2. Intentar extraer DOI del texto
+        doi = None
+        if extracted_text:
+            doi = extract_doi_from_text(extracted_text)
+            if doi:
+                print(f"DOI encontrado en el texto: {doi}")
         
-        # Extraer los datos que necesitamos
-        metadata = {
-            'title': title,
-            'authors': author_names,
-            'year': year,
-            'journal': journal,
-            'doi': doi,
-            'abstract': abstract
+        # 3. Si encontramos DOI, consultar CrossRef
+        if doi and HABANERO_AVAILABLE:
+            print(f"Consultando CrossRef con DOI: {doi}")
+            cr_metadata = get_metadata_from_crossref(doi=doi)
+            if cr_metadata and cr_metadata.get('title'):
+                print("Metadatos obtenidos exitosamente de CrossRef por DOI")
+                
+                # Si no tenemos abstract pero tenemos texto extraído, usar las primeras 500 palabras
+                if not cr_metadata.get('abstract') and extracted_text:
+                    cr_metadata['abstract'] = ' '.join(extracted_text.split()[:500])
+                
+                return cr_metadata
+        
+        # 4. Intentar con título si tenemos texto pero no DOI o CrossRef falló
+        if extracted_text:
+            # Extraer título con heurística simple (primeras líneas no vacías)
+            potential_title = ''
+            for line in extracted_text.split('\n')[:10]:  # Revisar las primeras 10 líneas
+                line = line.strip()
+                if line and len(line) > 20 and len(line) < 300:
+                    potential_title = line
+                    break
+            
+            if potential_title and HABANERO_AVAILABLE:
+                print(f"Intentando con título extraído: {potential_title}")
+                cr_metadata = get_metadata_from_crossref(title=potential_title)
+                if cr_metadata and cr_metadata.get('title'):
+                    print("Metadatos obtenidos exitosamente de CrossRef con título")
+                    
+                    # Si no tenemos abstract pero tenemos texto extraído, usar las primeras 500 palabras
+                    if not cr_metadata.get('abstract') and extracted_text:
+                        cr_metadata['abstract'] = ' '.join(extracted_text.split()[:500])
+                    
+                    return cr_metadata
+        
+        # 5. Usar ChatGPT para análisis como último recurso
+        if extracted_text:
+            print("Usando ChatGPT para análisis de texto")
+            filename = os.path.basename(pdf_file_path)
+            return analyze_pdf_with_chatgpt(extracted_text, filename)
+        
+        # 6. Fallback final - devolver metadatos mínimos
+        filename = os.path.basename(pdf_file_path)
+        print(f"No se pudieron extraer metadatos. Devolviendo información básica para {filename}")
+        return {
+            'title': filename,
+            'authors': 'No detectado automáticamente',
+            'year': None,
+            'journal': 'No detectado automáticamente',
+            'doi': doi if doi else 'No detectado automáticamente',
+            'abstract': extracted_text[:500] if extracted_text else "No se pudo extraer texto del PDF"
         }
-        
-        # Verificar si los datos son válidos
-        if (metadata['title'] != os.path.basename(pdf_file_path) and 
-            metadata['authors'] != "Autor desconocido" and
-            metadata['abstract'] != "Sin resumen disponible"):
-            
-            print(f"Science-Parse - Metadatos extraídos con éxito: {metadata}")
-            return metadata
-        else:
-            print("Science-Parse - Extracción parcial, probando con extracción de texto + ChatGPT")
-            raise Exception("Datos insuficientes de Science-Parse")
+    
+    except Exception as e:
+        print(f"Error general en el proceso de extracción mejorada: {e}")
+        traceback.print_exc()
+        filename = os.path.basename(pdf_file_path)
+        return {
+            'title': filename,
+            'authors': 'Error en el proceso de extracción',
+            'year': None,
+            'journal': 'Error en el proceso de extracción',
+            'doi': 'Error en el proceso de extracción',
+            'abstract': f"Error en el proceso de extracción: {str(e)}"
+        }
+
+
+def extract_pdf_metadata(pdf_file_path):
+    """
+    Extrae metadatos de un PDF usando el flujo mejorado con fallbacks
+    Esta función mantiene la interfaz original para compatibilidad
+    """
+    try:
+        # Usar la nueva función mejorada
+        print(f"Intentando extraer metadatos de: {pdf_file_path}")
+        return extract_pdf_metadata_enhanced(pdf_file_path)
         
     except Exception as e:
-        print(f"Science-Parse falló: {e}")
+        print(f"Error en extract_pdf_metadata: {e}")
+        traceback.print_exc()
         
-        # Intento 2: Extraer texto del PDF
-        extracted_text = ""
-        
-        # Intentar primero con pdfminer si está disponible
-        if PDFMINER_AVAILABLE:
-            extracted_text = extract_text_with_pdfminer(pdf_file_path)
-            
-        # Si pdfminer falla o extrae poco texto, intentar con PyPDF2
-        if not extracted_text or len(extracted_text.strip()) < 100:
-            if PYPDF2_AVAILABLE:
-                extracted_text = extract_text_from_pdf(pdf_file_path)
-        
-        # Intento 3: Si tenemos suficiente texto, analizar con ChatGPT
-        if extracted_text and len(extracted_text.strip()) > 100:
-            filename = os.path.basename(pdf_file_path)
-            print(f"Extraído texto ({len(extracted_text)} caracteres), analizando con ChatGPT")
-            return analyze_pdf_with_chatgpt(extracted_text, filename)
-        else:
-            # Fallback final - no se pudo extraer texto suficiente
-            filename = os.path.basename(pdf_file_path)
-            print("No se pudo extraer suficiente texto del PDF")
-            return {
-                'title': filename,
-                'authors': 'No detectado automáticamente',
-                'year': None,
-                'journal': 'No detectado automáticamente',
-                'doi': 'No detectado automáticamente',
-                'abstract': "No se pudo extraer suficiente texto del PDF para análisis."
-            }
+        # Fallback: devolver datos básicos
+        filename = os.path.basename(pdf_file_path)
+        return {
+            'title': filename,
+            'authors': 'Error en extracción',
+            'year': None,
+            'journal': 'Error en extracción',
+            'doi': 'Error en extracción',
+            'abstract': f"Error en extracción: {str(e)}"
+        }
+
 
 def analyze_with_chatgpt(metadata, subquestions):
     """Analiza los metadatos con ChatGPT para responder las subpreguntas"""
@@ -321,7 +463,7 @@ def analyze_with_chatgpt(metadata, subquestions):
         DOI: {metadata['doi']}
         Resumen: {metadata['abstract']}
         
-        Por favor, responde a las siguientes preguntas de forma CORTA y DIRECTA (máximo 1-2 oraciones por respuesta):
+        Por favor, responde a las siguientes preguntas de forma CORTA y DIRECTA (maximo 10 palabras por respuesta):
         """
         
         for i, question in enumerate(subquestions, 1):
@@ -331,10 +473,10 @@ def analyze_with_chatgpt(metadata, subquestions):
         prompt += "\n\nDevuelve tus respuestas en formato JSON con este formato exacto (incluye todas las subpreguntas aunque estén vacías):\n"
         prompt += """
         {
-          "subpregunta_1": "Respuesta corta a la primera pregunta",
-          "subpregunta_2": "Respuesta corta a la segunda pregunta",
-          "subpregunta_3": "Respuesta corta a la tercera pregunta",
-          "analysis": "Un análisis más detallado si es necesario"
+            "subpregunta_1": "Respuesta corta y concisa en formato de lista a la primera pregunta",
+            "subpregunta_2": "Respuesta corta y concisa en formato de lista a la segunda pregunta",
+            "subpregunta_3": "Respuesta corta y concisa en formato de lista a la tercera pregunta",
+            "analysis": "Un análisis corto y conciso si es necesario (maximo 10 palabras)"
         }
         """
         
@@ -342,7 +484,7 @@ def analyze_with_chatgpt(metadata, subquestions):
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Eres un asistente de investigación especializado en análisis científico. Respondes de forma concisa y directa."},
+                {"role": "system", "content": "Eres un investigador especializado en análisis científico y mapeo de literatura. Respondes de forma concisa y directa."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=1000
@@ -351,10 +493,6 @@ def analyze_with_chatgpt(metadata, subquestions):
         result_text = response.choices[0].message.content
         
         # Intentar extraer el JSON de la respuesta
-        import json
-        import re
-        
-        # Buscar el patrón de JSON en la respuesta
         json_match = re.search(r'({[\s\S]*})', result_text)
         if json_match:
             json_str = json_match.group(1)
@@ -393,7 +531,6 @@ def analyze_with_chatgpt(metadata, subquestions):
         return result
     except Exception as e:
         print(f"Error en el análisis con ChatGPT: {e}")
-        import traceback
         traceback.print_exc()
         return {
             "analysis": f"Error en el análisis: {str(e)}",
