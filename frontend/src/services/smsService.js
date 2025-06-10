@@ -296,6 +296,36 @@ export const smsService = {
             throw new Error(error.response?.data?.error || 'Error al exportar los artículos');
         }
     },
+    // frontend/src/services/smsService.js - Versión con debug del método getSMSStatistics
+
+    getSMSStatistics: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            console.log('Obteniendo estadísticas para SMS:', smsId);
+            
+            // Construir la URL manualmente para debug
+            const url = `/api/sms/sms/${smsId}/statistics/`;
+            console.log('URL del endpoint:', url);
+            
+            const response = await api.get(url);
+            console.log('Respuesta del servidor:', response);
+            console.log('Datos de estadísticas:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error completo al obtener estadísticas:', error);
+            console.error('Status:', error.response?.status);
+            console.error('Data:', error.response?.data);
+            
+            if (error.response?.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '/auth/login';
+            }
+            throw error;
+        }
+    },
 };
 
 export default smsService;
