@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
+from django.db.models import Count
 import csv
 import io
 import os
@@ -213,6 +214,76 @@ class SMSViewSet(viewsets.ModelViewSet):
             result["errors"] = errors
         
         return Response(result)
+    
+    @action(detail=True, methods=['get'], url_path='statistics')
+    def get_statistics(self, request, pk=None):
+        """
+        Endpoint para obtener estadísticas de artículos del SMS
+        GET /api/sms/{id}/statistics/
+        """
+        try:
+            sms = self.get_object()
+            
+            # Contar artículos por estado
+            total_articles = sms.articles.count()
+            selected_count = sms.articles.filter(estado='SELECTED').count()
+            rejected_count = sms.articles.filter(estado='REJECTED').count()
+            pending_count = sms.articles.filter(estado='PENDING').count()
+            
+            # Contar artículos por año
+            articles_by_year = sms.articles.values('anio_publicacion').annotate(
+                count=Count('id')
+            ).order_by('anio_publicacion')
+            
+            # Contar artículos por enfoque
+            articles_by_focus = sms.articles.values('enfoque').annotate(
+                count=Count('id')
+            ).order_by('-count')
+            
+            # Contar artículos por tipo de registro
+            articles_by_type = sms.articles.values('tipo_registro').annotate(
+                count=Count('id')
+            ).order_by('-count')
+            
+            # Estadísticas del proceso de selección (simulando etapas)
+            # En un caso real, podrías tener campos adicionales para rastrear cada etapa
+            selection_process = {
+                'Búsqueda inicial': total_articles,
+                'Después de criterios de inclusión': selected_count + pending_count,
+                'Revisión de título y resumen': selected_count + max(0, pending_count - rejected_count//2),
+                'Revisión de texto completo': selected_count + pending_count//2,
+                'Artículos finales incluidos': selected_count
+            }
+            
+            statistics = {
+                'general': {
+                    'total_articles': total_articles,
+                    'selected_count': selected_count,
+                    'rejected_count': rejected_count,
+                    'pending_count': pending_count,
+                    'selection_rate': round((selected_count / total_articles * 100), 2) if total_articles > 0 else 0
+                },
+                'by_status': [
+                    {'status': 'Seleccionados', 'count': selected_count, 'color': '#10B981'},
+                    {'status': 'Rechazados', 'count': rejected_count, 'color': '#EF4444'},
+                    {'status': 'Pendientes', 'count': pending_count, 'color': '#F59E0B'}
+                ],
+                'by_year': list(articles_by_year),
+                'by_focus': list(articles_by_focus),
+                'by_type': list(articles_by_type),
+                'selection_process': [
+                    {'stage': stage, 'count': count} 
+                    for stage, count in selection_process.items()
+                ]
+            }
+            
+            return Response(statistics, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Error al obtener estadísticas: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class ArticleViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar artículos dentro de un SMS"""

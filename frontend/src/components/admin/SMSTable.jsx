@@ -13,13 +13,13 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
 
     return (
         <div>
-            <div className="flex flex-col md:flex-row md:items-center justify-start mb-6 gap-4">
+            <div className="flex flex-col justify-start gap-4 mb-6 md:flex-row md:items-center">
                 <Link to="/sms/new" className="btn btn-primary">
                     <FaPlus className="mr-3" />
                     Nuevo Mapeo
                 </Link>
             </div>
-            <label className="input input-bordered flex items-center gap-2 mb-4 max-w-sm">
+            <label className="flex items-center max-w-sm gap-2 mb-4 input input-bordered">
                 <FaSearch />
                 <input
                     type="text"
@@ -31,7 +31,7 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
             </label>
 
             <div className="overflow-x-auto">
-                <table className="table table-zebra w-full">
+                <table className="table w-full table-zebra">
                     <thead>
                         <tr>
                             <th>Título</th>
@@ -54,15 +54,18 @@ const MappingTable = ({ mappings, searchTerm, setSearchTerm, onDelete }) => {
                                     <td>{new Date(sms.fecha_creacion).toLocaleDateString()}</td>
                                     <td className="text-right">
                                         <div className="flex justify-end gap-2">
-                                            <Link to={`/sms/${sms.id}`} className="btn btn-sm btn-info text-white">
+                                            <Link 
+                                                to={`/sms/${sms.id}`} className="text-white btn btn-sm btn-info"
+                                                onClick={() => console.log('Navegando a SMS ID:', sms.id)}
+                                            >
                                                 Ver
                                             </Link>
-                                            <Link to={`/sms/${sms.id}/process`} className="btn btn-sm btn-secondary text-white">
+                                            <Link to={`/sms/${sms.id}/process`} className="text-white btn btn-sm btn-secondary">
                                                 Editar
                                             </Link>
                                             <button
                                                 onClick={() => onDelete(sms.id)}
-                                                className="btn btn-sm btn-error text-white"
+                                                className="text-white btn btn-sm btn-error"
                                             >
                                                 Eliminar
                                             </button>
