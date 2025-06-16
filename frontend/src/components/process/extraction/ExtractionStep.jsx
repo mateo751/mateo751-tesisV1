@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FaSpinner, FaSync, FaFileExport } from 'react-icons/fa';
+import { FaSpinner, FaSync, FaFileExport, FaExclamationTriangle } from 'react-icons/fa';
 import { smsService } from '@/services/smsService';
 
 const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComplete }) => {
@@ -7,9 +7,12 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
     const [results, setResults] = useState(analyzedResults || []);
     const [error, setError] = useState(null);
     const [selectedArticles, setSelectedArticles] = useState({});
+    const [hasAnalyzed, setHasAnalyzed] = useState(false);
+    const [showForceReanalysisModal, setShowForceReanalysisModal] = useState(false);
+    const [pendingReanalysis, setPendingReanalysis] = useState(false);
     
     // Función para analizar PDFs
-    const handleAnalyzePDFs = useCallback(async () => {
+    const handleAnalyzePDFs = useCallback(async (forceReanalysis = false) => {
         if (!formData.pdfFiles?.length) {
             setError('No hay archivos PDF para analizar');
             return;
@@ -24,9 +27,19 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
         setError(null);
         
         try {
-            const response = await smsService.analyzePDFs(smsId, formData.pdfFiles);
+            const response = await smsService.analyzePDFs(smsId, formData.pdfFiles, forceReanalysis);
+            
+            if (response.requires_confirmation && !forceReanalysis) {
+                // Si ya existen artículos, mostrar modal de confirmación
+                setShowForceReanalysisModal(true);
+                setPendingReanalysis(true);
+                setIsAnalyzing(false);
+                return;
+            }
+            
             const newResults = response.results || [];
             setResults(newResults);
+            setHasAnalyzed(true);
             
             // Inicializar selección de artículos (todos seleccionados por defecto)
             const initialSelection = {};
@@ -44,15 +57,59 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
             setError(`Error al analizar PDFs: ${err.message || 'Error desconocido'}`);
         } finally {
             setIsAnalyzing(false);
+            setPendingReanalysis(false);
         }
     }, [formData.pdfFiles, smsId, onAnalyzeComplete]);
     
-    // Iniciar análisis automáticamente si hay archivos y no hay resultados previos
+    // Confirmar re-análisis forzado
+    const handleConfirmReanalysis = () => {
+        setShowForceReanalysisModal(false);
+        handleAnalyzePDFs(true);
+    };
+    
+    // Cancelar re-análisis
+    const handleCancelReanalysis = () => {
+        setShowForceReanalysisModal(false);
+        setPendingReanalysis(false);
+    };
+    
+    // Cargar artículos existentes al inicializar
     useEffect(() => {
-        if (!analyzedResults && formData.pdfFiles?.length > 0 && !isAnalyzing) {
-            handleAnalyzePDFs();
-        } else if (analyzedResults) {
+        const loadExistingArticles = async () => {
+            if (smsId && !hasAnalyzed && !analyzedResults) {
+                try {
+                    const existingArticles = await smsService.getStudiesBySMSId(smsId);
+                    if (existingArticles && existingArticles.length > 0) {
+                        console.log('Cargando artículos existentes:', existingArticles.length);
+                        setResults(existingArticles);
+                        setHasAnalyzed(true);
+                        
+                        // Inicializar selección
+                        const initialSelection = {};
+                        existingArticles.forEach(article => {
+                            initialSelection[article.id] = true;
+                        });
+                        setSelectedArticles(initialSelection);
+                        
+                        if (onAnalyzeComplete) {
+                            onAnalyzeComplete(existingArticles);
+                        }
+                    }
+                } catch (error) {
+                    console.log('No hay artículos existentes o error al cargar:', error);
+                }
+            }
+        };
+        
+        loadExistingArticles();
+    }, [smsId, hasAnalyzed, analyzedResults, onAnalyzeComplete]);
+    
+    // Inicializar con resultados previos si existen
+    useEffect(() => {
+        if (analyzedResults && analyzedResults.length > 0) {
             setResults(analyzedResults);
+            setHasAnalyzed(true);
+            
             // Inicializar selección de artículos existentes
             const initialSelection = {};
             analyzedResults.forEach(result => {
@@ -60,7 +117,7 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
             });
             setSelectedArticles(initialSelection);
         }
-    }, [analyzedResults, formData.pdfFiles, handleAnalyzePDFs, isAnalyzing]);
+    }, [analyzedResults]);
     
     // Manejar la exportación de datos
     const handleExport = async () => {
@@ -106,7 +163,7 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold">Mapeos Sistemáticos</h2>
-                <div className="text-center">Selección de artículos</div>
+                <div className="text-center">Extracción y Análisis de Datos</div>
             </div>
             
             {error && (
@@ -116,24 +173,37 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
             )}
             
             <div className="flex items-center justify-between mb-4">
-                <button
-                    type="button"
-                    onClick={handleAnalyzePDFs}
-                    className="btn btn-primary"
-                    disabled={isAnalyzing || !formData.pdfFiles?.length}
-                >
-                    {isAnalyzing ? (
-                        <>
-                            <FaSpinner className="mr-2 animate-spin" />
-                            Analizando...
-                        </>
-                    ) : (
-                        <>
-                            <FaSync className="mr-2" />
-                            Re-analizar PDFs
-                        </>
+                <div className="flex items-center gap-4">
+                    <button
+                        type="button"
+                        onClick={() => handleAnalyzePDFs(false)}
+                        className="btn btn-primary"
+                        disabled={isAnalyzing || !formData.pdfFiles?.length}
+                    >
+                        {isAnalyzing ? (
+                            <>
+                                <FaSpinner className="mr-2 animate-spin" />
+                                Analizando...
+                            </>
+                        ) : hasAnalyzed ? (
+                            <>
+                                <FaSync className="mr-2" />
+                                Re-analizar PDFs
+                            </>
+                        ) : (
+                            <>
+                                <FaSync className="mr-2" />
+                                Analizar PDFs
+                            </>
+                        )}
+                    </button>
+                    
+                    {hasAnalyzed && results.length > 0 && (
+                        <div className="text-sm text-gray-600">
+                            {results.length} artículos analizados
+                        </div>
                     )}
-                </button>
+                </div>
                 
                 <button
                     type="button"
@@ -142,9 +212,39 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
                     disabled={isAnalyzing || results.length === 0}
                 >
                     <FaFileExport className="mr-2" />
-                    Exportar
+                    Exportar ({Object.values(selectedArticles).filter(Boolean).length})
                 </button>
             </div>
+            
+            {/* Modal de confirmación para re-análisis */}
+            {showForceReanalysisModal && (
+                <dialog className="modal modal-open">
+                    <div className="modal-box">
+                        <h3 className="text-lg font-bold">
+                            <FaExclamationTriangle className="inline mr-2 text-warning" />
+                            Artículos ya analizados
+                        </h3>
+                        <p className="py-4">
+                            Ya existen artículos analizados para este SMS. 
+                            ¿Desea eliminar los artículos existentes y re-analizar los PDFs?
+                        </p>
+                        <div className="modal-action">
+                            <button 
+                                className="btn btn-error" 
+                                onClick={handleConfirmReanalysis}
+                            >
+                                Sí, re-analizar
+                            </button>
+                            <button 
+                                className="btn btn-ghost" 
+                                onClick={handleCancelReanalysis}
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </dialog>
+            )}
             
             {/* Tabla de resultados */}
             {results.length > 0 && (
@@ -152,34 +252,38 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
                     <table className="table w-full">
                         <thead>
                             <tr>
-                                <th>título</th>
+                                <th>Seleccionar</th>
+                                <th>Título</th>
                                 <th>Autores</th>
                                 <th>Año</th>
                                 <th>DOI</th>
                                 <th>Enfoque del estudio</th>
                                 <th>Tipo de registro</th>
                                 <th>Tipo de técnica</th>
-                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {results.map(result => (
                                 <tr key={result.id} className={selectedArticles[result.id] ? "bg-base-200" : ""}>
-                                    <td>{result.title}</td>
-                                    <td>{result.authors}</td>
-                                    <td>{result.year || "N/A"}</td>
-                                    <td>{result.doi || "N/A"}</td>
-                                    <td>{result.res_subpregunta_1 || "N/A"}</td>
-                                    <td>{result.res_subpregunta_2 || "N/A"}</td>
-                                    <td>{result.res_subpregunta_3 || "N/A"}</td>
                                     <td>
-                                        <button 
-                                            className="btn btn-circle btn-ghost btn-sm"
-                                            onClick={() => handleToggleSelection(result.id)}
-                                        >
-                                            ...
-                                        </button>
+                                        <input
+                                            type="checkbox"
+                                            className="checkbox"
+                                            checked={selectedArticles[result.id] || false}
+                                            onChange={() => handleToggleSelection(result.id)}
+                                        />
                                     </td>
+                                    <td className="max-w-xs truncate" title={result.title || result.titulo}>
+                                        {result.title || result.titulo}
+                                    </td>
+                                    <td className="max-w-xs truncate" title={result.authors || result.autores}>
+                                        {result.authors || result.autores}
+                                    </td>
+                                    <td>{result.year || result.anio_publicacion || "N/A"}</td>
+                                    <td className="max-w-xs truncate">{result.doi || "N/A"}</td>
+                                    <td>{result.res_subpregunta_1 || result.respuesta_subpregunta_1 || "N/A"}</td>
+                                    <td>{result.res_subpregunta_2 || result.respuesta_subpregunta_2 || "N/A"}</td>
+                                    <td>{result.res_subpregunta_3 || result.respuesta_subpregunta_3 || "N/A"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -188,9 +292,14 @@ const ExtractionStep = ({ formData, smsId, analyzedResults = null, onAnalyzeComp
             )}
             
             {/* Mensaje cuando no hay resultados */}
-            {!isAnalyzing && results.length === 0 && (
+            {!isAnalyzing && results.length === 0 && !pendingReanalysis && (
                 <div className="py-8 text-center">
-                    <p className="text-gray-500">No hay artículos analizados. Por favor, analice sus PDFs.</p>
+                    <p className="text-gray-500">
+                        {formData.pdfFiles?.length > 0 
+                            ? 'Haga clic en "Analizar PDFs" para procesar los archivos cargados.'
+                            : 'No hay archivos PDF cargados para analizar.'
+                        }
+                    </p>
                 </div>
             )}
             

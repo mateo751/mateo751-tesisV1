@@ -317,11 +317,6 @@ class ArticleViewSet(viewsets.ModelViewSet):
         """
         Endpoint para seleccionar/deseleccionar artículos
         PATCH /api/sms/{sms_id}/articles/{article_id}/select/
-        
-        Espera un JSON con el estado:
-        {
-            "estado": "selected" | "rejected" | "pending"
-        }
         """
         article = self.get_object()
         
@@ -332,8 +327,6 @@ class ArticleViewSet(viewsets.ModelViewSet):
             )
         
         valid_states = ['SELECTED', 'REJECTED', 'PENDING']
-        
-        # Convertir a mayúsculas para hacer coincidir con los valores de la base de datos
         estado = request.data['estado'].upper()
         
         if estado not in valid_states:
@@ -342,10 +335,12 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        article.estado = request.data['estado']
+        article.estado = estado
         article.save()
         
         return Response(ArticleSerializer(article).data)
+    
+    @action(detail=True, methods=['put', 'patch'], url_path='edit')
     
     @action(detail=False, methods=['get'], url_path='export')
     def export_articles(self, request, sms_pk=None):
@@ -432,6 +427,22 @@ class ArticleViewSet(viewsets.ModelViewSet):
             # Obtener el SMS
             sms = self.get_sms()
             
+            # Verificar si ya existen artículos para este SMS
+            existing_articles = sms.articles.count()
+            force_reanalysis = request.data.get('force_reanalysis', False)
+            
+            if existing_articles > 0 and not force_reanalysis:
+                return Response({
+                    'error': 'Ya existen artículos analizados para este SMS. Use force_reanalysis=true para re-analizar.',
+                    'existing_count': existing_articles,
+                    'requires_confirmation': True
+                }, status=status.HTTP_409_CONFLICT)
+            
+            # Si es re-análisis forzado, eliminar artículos existentes
+            if force_reanalysis and existing_articles > 0:
+                sms.articles.all().delete()
+                print(f"Eliminados {existing_articles} artículos existentes para re-análisis")
+            
             # Obtener las subpreguntas para el análisis de ChatGPT
             subquestions = []
             
@@ -455,7 +466,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                     "¿Cuáles son las principales conclusiones?"
                 ]
                 
-            print(f"Subpreguntas a analizar: {subquestions}")  # Debug
+            print(f"Subpreguntas a analizar: {subquestions}")
             
             # Obtener los archivos del request
             files = request.FILES.getlist('files')
@@ -464,6 +475,8 @@ class ArticleViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
             
             results = []
+            processed_titles = set()  # Para evitar duplicados por título
+            
             for file in files:
                 # Guardar el archivo temporalmente
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp:
@@ -475,6 +488,20 @@ class ArticleViewSet(viewsets.ModelViewSet):
                     # Extraer metadatos
                     metadata = extract_pdf_metadata(temp_path)
                     
+                    # Verificar si ya existe un artículo con el mismo título
+                    title = metadata['title']
+                    if title in processed_titles:
+                        print(f"Saltando artículo duplicado con título: {title}")
+                        continue
+                    
+                    # Verificar en la base de datos si ya existe
+                    existing_article = sms.articles.filter(titulo__iexact=title).first()
+                    if existing_article and not force_reanalysis:
+                        print(f"Artículo ya existe en BD: {title}")
+                        continue
+                    
+                    processed_titles.add(title)
+                    
                     # Analizar con ChatGPT para responder subpreguntas
                     analysis_results = analyze_with_chatgpt(metadata, subquestions)
                     
@@ -483,39 +510,54 @@ class ArticleViewSet(viewsets.ModelViewSet):
                         'sms': sms,
                         'titulo': metadata['title'],
                         'autores': metadata['authors'],
-                        'anio_publicacion': metadata['year'] or 2023,  # Valor por defecto
-                        'doi': metadata['doi'],
+                        'anio_publicacion': metadata['year'] or 2023,
+                        'doi': metadata['doi'] if metadata['doi'] and metadata['doi'] != 'No detectado' else '',
                         'resumen': metadata['abstract'],
-                        'journal': metadata.get('journal', 'Sin revista'),
+                        # CORREGIR: Asegurar que journal no sea None o vacío
+                        'journal': metadata.get('journal', 'Sin revista') or 'Sin revista',
                         'enfoque': request.data.get('enfoque', 'No especificado'),
                         'tipo_registro': request.data.get('tipo_registro', 'No especificado'),
                         'tipo_tecnica': request.data.get('tipo_tecnica', 'No especificado'),
                         'notas': analysis_results.get('analysis', ''),
                         'estado': 'PENDING',
-                        # Aseguramos que siempre haya respuestas a las subpreguntas
-                        'respuesta_subpregunta_1': analysis_results.get('subpregunta_1', 'Respuesta pendiente de análisis'),
-                        'respuesta_subpregunta_2': analysis_results.get('subpregunta_2', 'Respuesta pendiente de análisis'),
-                        'respuesta_subpregunta_3': analysis_results.get('subpregunta_3', 'Respuesta pendiente de análisis')
+                        # CORREGIR: Asegurar que las respuestas no sean None o vacías
+                        'respuesta_subpregunta_1': analysis_results.get('subpregunta_1', '') or 'Análisis no disponible',
+                        'respuesta_subpregunta_2': analysis_results.get('subpregunta_2', '') or 'Análisis no disponible',
+                        'respuesta_subpregunta_3': analysis_results.get('subpregunta_3', '') or 'Análisis no disponible'
                     }
+                    
+                    # AÑADIR: Debug para verificar los datos antes de guardar
+                    print(f"DEBUG - Datos del artículo antes de guardar:")
+                    print(f"  - Título: {article_data['titulo']}")
+                    print(f"  - Journal: '{article_data['journal']}'")
+                    print(f"  - Respuesta 1: '{article_data['respuesta_subpregunta_1']}'")
+                    print(f"  - Respuesta 2: '{article_data['respuesta_subpregunta_2']}'")
+                    print(f"  - Respuesta 3: '{article_data['respuesta_subpregunta_3']}'")
                     
                     # Crear el artículo
                     article = Article.objects.create(**article_data)
                     
-                    # Preparar el resultado combinando metadatos y respuestas a subpreguntas
+                    # AÑADIR: Verificar que se guardó correctamente
+                    print(f"DEBUG - Artículo guardado con ID: {article.id}")
+                    print(f"  - Journal guardado: '{article.journal}'")
+                    print(f"  - Respuesta 1 guardada: '{article.respuesta_subpregunta_1}'")
+                    
+                    # Preparar el resultado
                     result = {
                         'id': article.id,
                         'title': metadata['title'],
                         'authors': metadata['authors'],
                         'year': metadata['year'],
-                        'journal': metadata.get('journal', 'Sin revista'),
+                        'journal': article.journal,  # Usar el valor guardado
                         'doi': metadata['doi'],
-                        'res_subpregunta_1': article_data['respuesta_subpregunta_1'],
-                        'res_subpregunta_2': article_data['respuesta_subpregunta_2'],
-                        'res_subpregunta_3': article_data['respuesta_subpregunta_3'],
+                        'res_subpregunta_1': article.respuesta_subpregunta_1,  # Usar valores guardados
+                        'res_subpregunta_2': article.respuesta_subpregunta_2,
+                        'res_subpregunta_3': article.respuesta_subpregunta_3,
                         'analysis': analysis_results.get('analysis', 'Análisis pendiente')
                     }
                     
                     results.append(result)
+
                     
                 finally:
                     # Limpiar el archivo temporal
@@ -524,7 +566,9 @@ class ArticleViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'results': results,
-                'message': f"Se analizaron {len(results)} archivos correctamente"
+                'message': f"Se analizaron {len(results)} archivos correctamente",
+                'total_processed': len(results),
+                'total_articles_in_sms': sms.articles.count()
             })
             
         except Exception as e:
@@ -534,24 +578,126 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 {"error": f"Error al analizar los PDFs: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-    @action(detail=True, methods=['GET'], url_path='get-article-details')
-    def get_article_details(self, request, pk=None):
+    @action(detail=True, methods=['put', 'patch'], url_path='edit')
+    def edit_article(self, request, sms_pk=None, pk=None):
         """
-        Obtiene los detalles de un artículo en el formato específico solicitado
+        Endpoint para editar un artículo específico
+        PUT/PATCH /api/sms/{sms_id}/articles/{article_id}/edit/
+        
+        Permite editar campos como:
+        - titulo, autores, anio_publicacion
+        - journal, doi, resumen
+        - respuesta_subpregunta_1, respuesta_subpregunta_2, respuesta_subpregunta_3
+        - estado, notas
         """
         try:
             article = self.get_object()
             
+            # Campos editables
+            editable_fields = [
+                'titulo', 'autores', 'anio_publicacion', 'journal', 'doi', 
+                'resumen', 'palabras_clave', 'metodologia', 'resultados', 
+                'conclusiones', 'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 
+                'respuesta_subpregunta_3', 'estado', 'notas'
+            ]
+            
+            # Validar que solo se envíen campos editables
+            invalid_fields = set(request.data.keys()) - set(editable_fields)
+            if invalid_fields:
+                return Response(
+                    {"detail": f"Campos no editables: {', '.join(invalid_fields)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validaciones específicas
+            if 'anio_publicacion' in request.data:
+                anio = request.data['anio_publicacion']
+                if anio and (anio < 1900 or anio > 2030):
+                    return Response(
+                        {"detail": "El año de publicación debe estar entre 1900 y 2030"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            if 'estado' in request.data:
+                valid_states = ['SELECTED', 'REJECTED', 'PENDING']
+                if request.data['estado'] not in valid_states:
+                    return Response(
+                        {"detail": f"El estado debe ser uno de: {', '.join(valid_states)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            # Actualizar solo los campos proporcionados
+            for field, value in request.data.items():
+                if field in editable_fields:
+                    # Limpiar valores vacíos
+                    if value == '' or value == 'None' or value == 'null':
+                        if field == 'journal':
+                            value = 'Sin revista'
+                        elif field.startswith('respuesta_subpregunta_'):
+                            value = 'Sin respuesta disponible'
+                        else:
+                            value = None if field in ['anio_publicacion'] else ''
+                    
+                    setattr(article, field, value)
+            
+            # Guardar cambios
+            article.save()
+            
+            # Log de la edición
+            print(f"Artículo {article.id} editado por usuario {request.user.username}")
+            print(f"Campos modificados: {list(request.data.keys())}")
+            
+            # Devolver el artículo actualizado
+            serializer = ArticleSerializer(article)
+            return Response({
+                "message": "Artículo actualizado exitosamente",
+                "article": serializer.data
+            })
+            
+        except Exception as e:
+            return Response(
+                {"detail": f"Error al actualizar el artículo: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    @action(detail=True, methods=['get'], url_path='details')
+    def get_article_details(self, request, sms_pk=None, pk=None):
+        """
+        Obtiene los detalles completos de un artículo para edición
+        GET /api/sms/{sms_id}/articles/{article_id}/details/
+        """
+        try:
+            article = self.get_object()
+            sms = article.sms
+            
+            # Preparar datos completos para el modal de edición
             response_data = {
-                "title": article.titulo,
-                "authors": article.autores,
-                "year": article.anio_publicacion,
+                "id": article.id,
+                "titulo": article.titulo or "",
+                "autores": article.autores or "",
+                "anio_publicacion": article.anio_publicacion,
                 "journal": article.journal or "Sin revista",
-                "doi": article.doi or "Sin DOI",
-                "res_subpregunta_1": article.respuesta_subpregunta_1 or "Respuesta corta a la primera subpregunta",
-                "res_subpregunta_2": article.respuesta_subpregunta_2 or "Respuesta corta a la segunda subpregunta",
-                "res_subpregunta_3": article.respuesta_subpregunta_3 or "Respuesta corta a la tercera subpregunta"
+                "doi": article.doi or "",
+                "resumen": article.resumen or "",
+                "palabras_clave": article.palabras_clave or "",
+                "metodologia": article.metodologia or "",
+                "resultados": article.resultados or "",
+                "conclusiones": article.conclusiones or "",
+                "respuesta_subpregunta_1": article.respuesta_subpregunta_1 or "",
+                "respuesta_subpregunta_2": article.respuesta_subpregunta_2 or "",
+                "respuesta_subpregunta_3": article.respuesta_subpregunta_3 or "",
+                "estado": article.estado,
+                "notas": article.notas or "",
+                "fecha_creacion": article.fecha_creacion,
+                "fecha_actualizacion": article.fecha_actualizacion,
+                # Información del SMS para contexto
+                "sms_info": {
+                    "id": sms.id,
+                    "titulo_estudio": sms.titulo_estudio,
+                    "pregunta_principal": sms.pregunta_principal,
+                    "subpregunta_1": sms.subpregunta_1,
+                    "subpregunta_2": sms.subpregunta_2,
+                    "subpregunta_3": sms.subpregunta_3
+                }
             }
             
             return Response(response_data, status=status.HTTP_200_OK)

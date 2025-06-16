@@ -224,12 +224,12 @@ export const smsService = {
         }
     },
     // En src/services/smsService.js, añade esta función
-    analyzePDFs: async (smsId, pdfFiles) => {
+    analyzePDFs: async (smsId, pdfFiles, forceReanalysis = false) => {
         try {
             if (!smsId) {
                 throw new Error('Se requiere un ID de SMS válido');
             }
-
+    
             // Crear un objeto FormData para enviar los archivos
             const formData = new FormData();
             
@@ -243,6 +243,11 @@ export const smsService = {
             formData.append('tipo_registro', 'No especificado');
             formData.append('tipo_tecnica', 'No especificado');
             
+            // Añadir flag de force_reanalysis
+            if (forceReanalysis) {
+                formData.append('force_reanalysis', 'true');
+            }
+            
             // Configurar headers específicos para FormData
             const config = {
                 headers: {
@@ -250,12 +255,24 @@ export const smsService = {
                 },
             };
             
-            console.log('Enviando PDFs para análisis:', pdfFiles.length, 'archivos');
+            console.log('Enviando PDFs para análisis:', {
+                archivos: pdfFiles.length,
+                forceReanalysis: forceReanalysis,
+                smsId: smsId
+            });
+            
             const response = await api.post(`/api/sms/sms/${smsId}/articles/analyze-pdfs/`, formData, config);
             console.log('Respuesta analyze-pdfs:', response.data);
+            
             return response.data;
         } catch (error) {
             console.error('Error al analizar PDFs:', error);
+            
+            // Manejar específicamente el error 409 (conflicto)
+            if (error.response?.status === 409) {
+                return error.response.data;
+            }
+            
             throw new Error(error.response?.data?.error || 'Error al analizar los PDFs');
         }
     },
@@ -326,6 +343,54 @@ export const smsService = {
             throw error;
         }
     },
+    updateArticle: async (smsId, articleId, articleData) => {
+        try {
+            if (!smsId || !articleId) {
+                throw new Error('Se requieren IDs válidos');
+            }
+            
+            console.log('Actualizando artículo:', { smsId, articleId, articleData });
+            
+            // Limpiar datos antes de enviar
+            const cleanData = {};
+            Object.keys(articleData).forEach(key => {
+                const value = articleData[key];
+                if (value !== undefined && value !== null && value !== '') {
+                    cleanData[key] = value;
+                }
+            });
+            
+            const response = await api.patch(
+                `/api/sms/sms/${smsId}/articles/${articleId}/edit/`, 
+                cleanData
+            );
+            
+            console.log('Artículo actualizado:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Error al actualizar artículo:', error);
+            
+            // Mejorar el manejo de errores
+            if (error.response?.data?.detail) {
+                throw new Error(error.response.data.detail);
+            } else if (error.response?.data) {
+                // Manejar errores de validación del serializer
+                const errorMessages = [];
+                Object.entries(error.response.data).forEach(([field, messages]) => {
+                    if (Array.isArray(messages)) {
+                        messages.forEach(message => {
+                            errorMessages.push(`${field}: ${message}`);
+                        });
+                    } else {
+                        errorMessages.push(`${field}: ${messages}`);
+                    }
+                });
+                throw new Error(errorMessages.join(', '));
+            }
+            
+            throw error;
+        }
+    },
     updateArticleStatus: async (smsId, articleId, newStatus) => {
         try {
             if (!smsId || !articleId) {
@@ -342,6 +407,56 @@ export const smsService = {
             return response.data;
         } catch (error) {
             console.error('Error al actualizar estado del artículo:', error);
+            throw error;
+        }
+    },
+    validateArticleData: (articleData) => {
+        const errors = {};
+        
+        // Validaciones básicas
+        if (!articleData.titulo || !articleData.titulo.trim()) {
+            errors.titulo = 'El título es obligatorio';
+        }
+        
+        if (!articleData.autores || !articleData.autores.trim()) {
+            errors.autores = 'Los autores son obligatorios';
+        }
+        
+        if (articleData.anio_publicacion) {
+            const year = parseInt(articleData.anio_publicacion);
+            if (isNaN(year) || year < 1900 || year > 2030) {
+                errors.anio_publicacion = 'El año debe estar entre 1900 y 2030';
+            }
+        }
+        
+        if (articleData.doi && articleData.doi.trim() && !articleData.doi.startsWith('10.')) {
+            errors.doi = 'El DOI debe tener un formato válido (ej: 10.1000/journal.2023.123)';
+        }
+        
+        const validStates = ['SELECTED', 'REJECTED', 'PENDING'];
+        if (articleData.estado && !validStates.includes(articleData.estado)) {
+            errors.estado = `El estado debe ser uno de: ${validStates.join(', ')}`;
+        }
+        
+        return {
+            isValid: Object.keys(errors).length === 0,
+            errors
+        };
+    },
+    getArticleDetails: async (smsId, articleId) => {
+        try {
+            if (!smsId || !articleId) {
+                throw new Error('Se requieren IDs válidos');
+            }
+            
+            console.log('Obteniendo detalles del artículo:', { smsId, articleId });
+            
+            const response = await api.get(`/api/sms/sms/${smsId}/articles/${articleId}/details/`);
+            console.log('Detalles del artículo obtenidos:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al obtener detalles del artículo:', error);
             throw error;
         }
     },

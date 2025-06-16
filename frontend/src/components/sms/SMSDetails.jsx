@@ -6,6 +6,7 @@ import { useSMS } from '@/context/SMSContext';
 import { smsService } from '@/services/smsService';
 import Layout from '@/components/layout/Layout';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/common/Tabs';
+import ArticleEditModal from '@/components/sms/ArticleEditModal';
 
 const SMSDetails = () => {
   const { id } = useParams();
@@ -27,6 +28,10 @@ const SMSDetails = () => {
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showArticleModal, setShowArticleModal] = useState(false);
   const itemsPerPage = 10;
+
+  // Estados para edición
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingArticleId, setEditingArticleId] = useState(null);
 
   // Calcular artículos filtrados y paginación
   const filteredArticles = useMemo(() => {
@@ -229,11 +234,44 @@ const SMSDetails = () => {
     setShowArticleModal(true);
   };
 
-  const handleEditArticle = (article) => {
-    // Aquí puedes implementar la lógica para editar un artículo
-    console.log('Editar artículo:', article);
-    // Por ejemplo, abrir un modal de edición o navegar a una página de edición
+  const handleEditArticle = async (article) => {
+    console.log('Editando artículo:', article);
+    setEditingArticleId(article.id);
+    setShowEditModal(true);
   };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setEditingArticleId(null);
+  };
+
+  const handleSaveArticle = async (updatedArticle) => {
+    try {
+      console.log('Artículo actualizado:', updatedArticle);
+      
+      // Actualizar la lista local de artículos
+      setArticles(prev => 
+        prev.map(article => 
+          article.id === updatedArticle.id 
+            ? { ...article, ...updatedArticle }
+            : article
+        )
+      );
+      
+      // Mostrar mensaje de éxito
+      // Puedes implementar un sistema de notificaciones aquí
+      console.log('Artículo guardado exitosamente');
+      
+      // Recargar artículos para asegurar datos actualizados
+      setTimeout(() => {
+        loadArticles();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error al procesar artículo guardado:', error);
+    }
+  };
+
 
   // Componente Modal para ver detalles del artículo
   const ArticleModal = () => {
@@ -672,15 +710,6 @@ const SMSDetails = () => {
                 </div>
               ) : (
                 <>
-                  {/* Información de debug */}
-                  <div className="p-2 text-xs rounded bg-base-200">
-                    <strong>Debug:</strong> {filteredArticles.length} artículos filtrados, 
-                    página {currentPage} de {totalPages}
-                    {filteredArticles.length > 0 && (
-                      <span> - Primer artículo: {JSON.stringify(filteredArticles[0], null, 2).substring(0, 200)}...</span>
-                    )}
-                  </div>
-
                   {/* Contenedor con scroll horizontal mejorado */}
                   <div className="overflow-hidden border rounded-lg shadow-lg border-base-300">
                     <div className="overflow-x-auto">
@@ -732,7 +761,35 @@ const SMSDetails = () => {
                         </thead>
                         <tbody>
                           {paginatedArticles.map((article, index) => {
-                            console.log(`Artículo ${index}:`, article); // Debug
+                            console.log(`Debug Artículo ${index}:`, {
+                              id: article.id,
+                              titulo: article.titulo,
+                              journal: article.journal,
+                              respuesta1: article.respuesta_subpregunta_1,
+                              respuesta2: article.respuesta_subpregunta_2,
+                              respuesta3: article.respuesta_subpregunta_3
+                            });
+                            
+                            // Función helper para limpiar y mostrar datos
+                            const getCleanValue = (value, defaultText = 'No disponible') => {
+                              if (!value || value === 'None' || value === 'null' || value.trim() === '') {
+                                return defaultText;
+                              }
+                              return value.trim();
+                            };
+                            
+                            // Función helper para obtener revista
+                            const getJournal = (article) => {
+                              return getCleanValue(article.journal, 'Sin revista');
+                            };
+                            
+                            // Función helper para obtener respuestas a subpreguntas
+                            const getSubquestionResponse = (article, questionNumber) => {
+                              const fieldName = `respuesta_subpregunta_${questionNumber}`;
+                              const value = article[fieldName];
+                              return getCleanValue(value, 'Sin respuesta disponible');
+                            };
+                            
                             return (
                               <tr 
                                 key={article.id} 
@@ -748,7 +805,7 @@ const SMSDetails = () => {
                                 <td className="max-w-80">
                                   <div className="tooltip tooltip-right" data-tip={article.titulo || 'Sin título'}>
                                     <p className="font-medium break-words line-clamp-2">
-                                      {article.titulo || 'Sin título'}
+                                      {getCleanValue(article.titulo, 'Sin título')}
                                     </p>
                                   </div>
                                 </td>
@@ -757,7 +814,7 @@ const SMSDetails = () => {
                                 <td className="max-w-60">
                                   <div className="tooltip tooltip-right" data-tip={article.autores || 'Sin autores'}>
                                     <p className="break-words line-clamp-2">
-                                      {article.autores || 'Sin autores'}
+                                      {getCleanValue(article.autores, 'Sin autores')}
                                     </p>
                                   </div>
                                 </td>
@@ -766,18 +823,18 @@ const SMSDetails = () => {
                                   {article.anio_publicacion || '-'}
                                 </td>
                                 
-                                {/* Revista */}
+                                {/* Revista - CORREGIDA */}
                                 <td className="max-w-40">
-                                  <div className="tooltip tooltip-right" data-tip={article.journal || 'No especificada'}>
-                                    <p className="truncate">
-                                      {article.journal || 'N/A'}
+                                  <div className="tooltip tooltip-right" data-tip={getJournal(article)}>
+                                    <p className="font-medium break-words line-clamp-2">
+                                      {getJournal(article)}
                                     </p>
                                   </div>
                                 </td>
                                 
                                 {/* DOI con enlace */}
                                 <td className="max-w-40">
-                                  {article.doi && article.doi !== 'N/A' ? (
+                                  {article.doi && article.doi !== 'N/A' && article.doi !== 'None' && article.doi.trim() !== '' ? (
                                     <a 
                                       href={`https://doi.org/${article.doi}`} 
                                       target="_blank" 
@@ -785,7 +842,7 @@ const SMSDetails = () => {
                                       className="text-blue-600 hover:text-blue-800 hover:underline"
                                       title={`Ver en DOI: ${article.doi}`}
                                     >
-                                      <div className="truncate">
+                                      <div className="font-medium break-words line-clamp-2">
                                         {article.doi.length > 30 ? 
                                           article.doi.substring(0, 30) + '...' : 
                                           article.doi
@@ -810,52 +867,61 @@ const SMSDetails = () => {
                                   </select>
                                 </td>
                                 
-                                {/* Respuestas a subpreguntas - MEJORADAS */}
+                                {/* Respuestas a subpreguntas - CORREGIDAS */}
                                 <td className="max-w-64">
                                   <div className="p-2 rounded bg-base-100">
-                                    {article.respuesta_subpregunta_1 ? (
-                                      <div className="tooltip tooltip-left" data-tip={article.respuesta_subpregunta_1}>
-                                        <p className="text-sm break-words ">
-                                          {article.respuesta_subpregunta_1}
-                                        </p>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs italic text-gray-500">
-                                        Sin respuesta disponible
-                                      </span>
-                                    )}
+                                    {(() => {
+                                      const respuesta = getSubquestionResponse(article, 1);
+                                      return respuesta !== 'Sin respuesta disponible' ? (
+                                        <div className="tooltip tooltip-left" data-tip={respuesta}>
+                                          <p className="text-sm break-words line-clamp-3">
+                                            {respuesta}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs italic text-gray-500">
+                                          {respuesta}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </td>
                                 
                                 <td className="max-w-64">
                                   <div className="p-2 rounded bg-base-100">
-                                    {article.respuesta_subpregunta_2 ? (
-                                      <div className="tooltip tooltip-left" data-tip={article.respuesta_subpregunta_2}>
-                                        <p className="text-sm break-words line-clamp-3">
-                                          {article.respuesta_subpregunta_2}
-                                        </p>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs italic text-gray-500">
-                                        Sin respuesta disponible
-                                      </span>
-                                    )}
+                                    {(() => {
+                                      const respuesta = getSubquestionResponse(article, 2);
+                                      return respuesta !== 'Sin respuesta disponible' ? (
+                                        <div className="tooltip tooltip-left" data-tip={respuesta}>
+                                          <p className="text-sm break-words line-clamp-3">
+                                            {respuesta}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs italic text-gray-500">
+                                          {respuesta}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </td>
                                 
                                 <td className="max-w-64">
                                   <div className="p-2 rounded bg-base-100">
-                                    {article.respuesta_subpregunta_3 ? (
-                                      <div className="tooltip tooltip-left" data-tip={article.respuesta_subpregunta_3}>
-                                        <p className="text-sm break-words line-clamp-3">
-                                          {article.respuesta_subpregunta_3}
-                                        </p>
-                                      </div>
-                                    ) : (
-                                      <span className="text-xs italic text-gray-500">
-                                        Sin respuesta disponible
-                                      </span>
-                                    )}
+                                    {(() => {
+                                      const respuesta = getSubquestionResponse(article, 3);
+                                      return respuesta !== 'Sin respuesta disponible' ? (
+                                        <div className="tooltip tooltip-left" data-tip={respuesta}>
+                                          <p className="text-sm break-words line-clamp-3">
+                                            {respuesta}
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs italic text-gray-500">
+                                          {respuesta}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </td>
                                 
@@ -1015,6 +1081,13 @@ const SMSDetails = () => {
 
         {/* Modal de detalles del artículo */}
         <ArticleModal />
+        <ArticleEditModal
+          isOpen={showEditModal}
+          onClose={handleCloseEditModal}
+          articleId={editingArticleId}
+          smsId={id}
+          onSave={handleSaveArticle}
+        />
       </div>
     </Layout>
   );
