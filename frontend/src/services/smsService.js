@@ -326,6 +326,25 @@ export const smsService = {
             throw error;
         }
     },
+    updateArticleStatus: async (smsId, articleId, newStatus) => {
+        try {
+            if (!smsId || !articleId) {
+                throw new Error('Se requieren IDs válidos');
+            }
+            
+            console.log('Actualizando estado del artículo:', { smsId, articleId, newStatus });
+            
+            const response = await api.patch(
+                `/api/sms/sms/${smsId}/articles/${articleId}/select/`, 
+                { estado: newStatus }
+            );
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al actualizar estado del artículo:', error);
+            throw error;
+        }
+    },
 };
 
 export default smsService;
