@@ -46,76 +46,41 @@ const ProcessManager = () => {
   const [analyzedResults, setAnalyzedResults] = useState(null);
 
   // Cargar datos solo una vez al inicio
-  useEffect(() => {
-    if (dataInitialized) return;
-    
-    const initializeData = async () => {
-      setLoading(true);
-      try {
-        // Intentar cargar del localStorage
-        const savedData = localStorage.getItem('sms_draft');
-        const savedStep = localStorage.getItem('sms_step');
-        const savedId = localStorage.getItem('sms_id');
-        
-        let idToUse = id || savedId || null;
-        
-        if (idToUse) {
-          // Si hay un ID, cargamos del servidor
-          const data = await fetchSMSById(idToUse);
-          if (data) {
-            setSmsId(idToUse);
-            setFormData({
-              titulo_estudio: data.titulo_estudio || '',
-              autores: data.autores || '',
-              pregunta_principal: data.pregunta_principal || '',
-              subpregunta_1: data.subpregunta_1 || '',
-              subpregunta_2: data.subpregunta_2 || '',
-              subpregunta_3: data.subpregunta_3 || '',
-              cadena_busqueda: data.cadena_busqueda && data.cadena_busqueda !== '(pendiente)' 
-                ? data.cadena_busqueda : '',
-              anio_inicio: data.anio_inicio || 2000,
-              anio_final: data.anio_final || new Date().getFullYear(),
-              fuentes: data.fuentes && data.fuentes !== 'Por definir' ? data.fuentes : '',
-              criterios_inclusion: data.criterios_inclusion && data.criterios_inclusion !== 'Por definir' 
-                ? data.criterios_inclusion : '',
-              criterios_exclusion: data.criterios_exclusion && data.criterios_exclusion !== 'Por definir' 
-                ? data.criterios_exclusion : '',
-              pdfFiles: formData.pdfFiles || [],
-            });
-            
-            if (savedStep) {
-              setCurrentStep(parseInt(savedStep));
-            }
-          }
-        } else if (savedData) {
-          // Si solo hay datos locales, los cargamos
+    useEffect(() => {
+      if (dataInitialized) return;
+      
+      const initializeData = async () => {
+          setLoading(true);
           try {
-            const parsedData = JSON.parse(savedData);
-            setFormData(parsedData);
-            if (savedStep) {
-              setCurrentStep(parseInt(savedStep));
-            }
+              // ... código existente ...
+              
+              // Cargar resultados analizados desde localStorage si existen
+              const savedAnalyzedResults = localStorage.getItem('sms_analyzed_results');
+              if (savedAnalyzedResults) {
+                  try {
+                      const parsedResults = JSON.parse(savedAnalyzedResults);
+                      setAnalyzedResults(parsedResults);
+                  } catch (error) {
+                      console.error('Error al parsear resultados analizados:', error);
+                      localStorage.removeItem('sms_analyzed_results');
+                  }
+              }
+              
+              setDataInitialized(true);
           } catch (error) {
-            console.error('Error al parsear datos guardados:', error);
-            localStorage.removeItem('sms_draft');
-            localStorage.removeItem('sms_step');
+              console.error('Error al inicializar datos:', error);
+              // Limpiar localStorage en caso de error
+              localStorage.removeItem('sms_draft');
+              localStorage.removeItem('sms_step');
+              localStorage.removeItem('sms_id');
+              localStorage.removeItem('sms_analyzed_results');
+          } finally {
+              setLoading(false);
           }
-        }
-        
-        setDataInitialized(true);
-      } catch (error) {
-        console.error('Error al inicializar datos:', error);
-        // Si hay error, limpiamos el localStorage
-        localStorage.removeItem('sms_draft');
-        localStorage.removeItem('sms_step');
-        localStorage.removeItem('sms_id');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    initializeData();
-  }, [id, fetchSMSById, dataInitialized, formData.pdfFiles]);
+      };
+      
+      initializeData();
+  }, [id, fetchSMSById, dataInitialized]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -357,32 +322,30 @@ const ProcessManager = () => {
     if (!validateStep(currentStep)) return;
     
     try {
-      setIsSaving(true);
-      
-      // Verificar que tengamos un ID válido
-      if (!smsId) {
-        throw new Error('No se encontró el ID del SMS. Por favor, vuelva al inicio del proceso.');
-      }
-      
-      // En el paso 5, ya hemos procesado los PDFs,
-      // así que podemos finalizar directamente
-
-      // Limpiar localStorage
-      localStorage.removeItem('sms_draft');
-      localStorage.removeItem('sms_step');
-      localStorage.removeItem('sms_id');
-      
-      // Redirigir a la lista de SMS
-      navigate('/sms');
+        setIsSaving(true);
+        
+        // Verificar que tengamos un ID válido
+        if (!smsId) {
+            throw new Error('No se encontró el ID del SMS. Por favor, vuelva al inicio del proceso.');
+        }
+        
+        // Limpiar localStorage
+        localStorage.removeItem('sms_draft');
+        localStorage.removeItem('sms_step');
+        localStorage.removeItem('sms_id');
+        localStorage.removeItem('sms_analyzed_results'); // Añadir esta línea
+        
+        // Redirigir a la lista de SMS
+        navigate('/sms');
     } catch (error) {
-      console.error('Error al finalizar:', error);
-      setErrors({ 
-        general: "Error al finalizar: " + (error.response?.data?.detail || error.message)
-      });
+        console.error('Error al finalizar:', error);
+        setErrors({ 
+            general: "Error al finalizar: " + (error.response?.data?.detail || error.message)
+        });
     } finally {
-      setIsSaving(false);
+        setIsSaving(false);
     }
-  };
+};
 
   const renderStep = () => {
     switch (currentStep) {
@@ -420,15 +383,19 @@ const ProcessManager = () => {
             errors={errors}
           />
         );
-      case 5:
-        return (
-          <ExtractionStep
-            formData={formData}
-            smsId={smsId}
-            analyzedResults={analyzedResults}
-            onAnalyzeComplete={(results) => setAnalyzedResults(results)}
-          />
-        );
+        case 5:
+          return (
+              <ExtractionStep
+                  formData={formData}
+                  smsId={smsId}
+                  analyzedResults={analyzedResults}
+                  onAnalyzeComplete={(results) => {
+                      setAnalyzedResults(results);
+                      // Guardar en localStorage para persistencia
+                      localStorage.setItem('sms_analyzed_results', JSON.stringify(results));
+                  }}
+              />
+          );
       default:
         return null;
     }
