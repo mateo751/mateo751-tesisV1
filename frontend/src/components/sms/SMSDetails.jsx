@@ -1,12 +1,13 @@
-// frontend/src/components/SMS/SMSDetails.jsx - Versión completa con tabla mejorada
+// frontend/src/components/SMS/SMSDetails.jsx - Versión actualizada con visualizaciones avanzadas
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaArrowLeft, FaEdit, FaTable, FaChartBar, FaFileExport, FaEye } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaTable, FaFileExport, FaEye, FaChartArea } from 'react-icons/fa';
 import { useSMS } from '@/context/SMSContext';
 import { smsService } from '@/services/smsService';
 import Layout from '@/components/layout/Layout';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/common/Tabs';
 import ArticleEditModal from '@/components/sms/ArticleEditModal';
+import SMSAdvancedStatistics from '@/components/SMS/SMSAdvancedStatistics'; // Nueva importación
 
 const SMSDetails = () => {
   const { id } = useParams();
@@ -20,7 +21,6 @@ const SMSDetails = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('details');
   const [loadingArticles, setLoadingArticles] = useState(false);
-  const [loadingStats, setLoadingStats] = useState(false);
   
   // Estados para la tabla mejorada
   const [statusFilter, setStatusFilter] = useState('');
@@ -137,16 +137,12 @@ const SMSDetails = () => {
     if (!id) return;
     
     try {
-      setLoadingStats(true);
-      console.log('Cargando estadísticas para SMS:', id);
       const statsData = await smsService.getSMSStatistics(id);
       console.log('Estadísticas cargadas:', statsData);
       setStatistics(statsData);
     } catch (err) {
       console.error('Error al cargar estadísticas:', err);
       setStatistics(null);
-    } finally {
-      setLoadingStats(false);
     }
   }, [id]);
 
@@ -156,9 +152,9 @@ const SMSDetails = () => {
     }
   }, [id, loadSMSDetails, smsList]);
 
-  // Cargar artículos cuando se cambie a la pestaña de extracción
+  // Cargar artículos cuando se cambie a la pestaña de extracción o visualizaciones
   useEffect(() => {
-    if (activeTab === 'extraction' && articles.length === 0) {
+    if ((activeTab === 'extraction' || activeTab === 'visualizations') && articles.length === 0) {
       loadArticles();
     }
   }, [activeTab, articles.length, loadArticles]);
@@ -259,7 +255,6 @@ const SMSDetails = () => {
       );
       
       // Mostrar mensaje de éxito
-      // Puedes implementar un sistema de notificaciones aquí
       console.log('Artículo guardado exitosamente');
       
       // Recargar artículos para asegurar datos actualizados
@@ -280,7 +275,7 @@ const SMSDetails = () => {
     return (
       <dialog className={`modal ${showArticleModal ? 'modal-open' : ''}`}>
         <div className="w-11/12 max-w-4xl modal-box">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold">Detalles del Artículo</h3>
             <button 
               className="btn btn-ghost btn-sm"
@@ -379,8 +374,8 @@ const SMSDetails = () => {
     return (
       <Layout>
         <div className="container px-4 py-8 mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="w-12 h-12 border-t-2 border-b-2 rounded-full animate-spin border-primary"></div>
+          <div className="flex justify-center items-center h-64">
+            <div className="w-12 h-12 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
             <span className="ml-4">Cargando detalles del SMS...</span>
           </div>
         </div>
@@ -427,8 +422,8 @@ const SMSDetails = () => {
     <Layout>
       <div className="container px-4 py-8 mx-auto max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex gap-4 items-center">
             <Link to="/sms" className="btn btn-ghost btn-sm">
               <FaArrowLeft className="mr-2" />
               Volver
@@ -453,9 +448,9 @@ const SMSDetails = () => {
           </div>
         )}
 
-        {/* Tabs Navigation */}
+        {/* Tabs Navigation - ACTUALIZADO CON NUEVA PESTAÑA */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid grid-cols-3 w-full">
             <TabsTrigger value="details">
               <FaEye className="mr-2" />
               Detalles
@@ -464,9 +459,9 @@ const SMSDetails = () => {
               <FaTable className="mr-2" />
               Extracción de Datos
             </TabsTrigger>
-            <TabsTrigger value="statistics">
-              <FaChartBar className="mr-2" />
-              Estadísticas
+            <TabsTrigger value="visualizations">
+              <FaChartArea className="mr-2" />
+              Visualizaciones
             </TabsTrigger>
           </TabsList>
 
@@ -661,24 +656,24 @@ const SMSDetails = () => {
                 {/* Resumen estadístico */}
                 <div className="grid grid-cols-2 gap-4 mt-4 md:grid-cols-4">
                   <div className="p-3 rounded-lg bg-base-100">
-                    <div className="text-xs text-gray-600">Total</div>
+                    <div className="text-xs text-white">Total</div>
                     <div className="text-lg font-semibold">{articles.length}</div>
                   </div>
                   <div className="p-3 rounded-lg bg-success/20">
-                    <div className="text-xs text-gray-600">Seleccionados</div>
-                    <div className="text-lg font-semibold text-success">
+                    <div className="text-xs text-white">Seleccionados</div>
+                    <div className="text-lg font-semibold text-white">
                       {articles.filter(a => a.estado === 'SELECTED').length}
                     </div>
                   </div>
                   <div className="p-3 rounded-lg bg-warning/20">
-                    <div className="text-xs text-gray-600">Pendientes</div>
-                    <div className="text-lg font-semibold text-warning">
+                    <div className="text-xs text-white">Pendientes</div>
+                    <div className="text-lg font-semibold text-white">
                       {articles.filter(a => a.estado === 'PENDING').length}
                     </div>
                   </div>
                   <div className="p-3 rounded-lg bg-error/20">
-                    <div className="text-xs text-gray-600">Rechazados</div>
-                    <div className="text-lg font-semibold text-error">
+                    <div className="text-xs text-white">Rechazados</div>
+                    <div className="text-lg font-semibold text-white">
                       {articles.filter(a => a.estado === 'REJECTED').length}
                     </div>
                   </div>
@@ -686,8 +681,8 @@ const SMSDetails = () => {
               </div>
 
               {loadingArticles ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="w-8 h-8 border-t-2 border-b-2 rounded-full animate-spin border-primary"></div>
+                <div className="flex justify-center items-center py-12">
+                  <div className="w-8 h-8 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
                   <span className="ml-3 text-lg">Cargando artículos...</span>
                 </div>
               ) : articles.length === 0 ? (
@@ -711,7 +706,7 @@ const SMSDetails = () => {
               ) : (
                 <>
                   {/* Contenedor con scroll horizontal mejorado */}
-                  <div className="overflow-hidden border rounded-lg shadow-lg border-base-300">
+                  <div className="overflow-hidden rounded-lg border shadow-lg border-base-300">
                     <div className="overflow-x-auto">
                       <table className="table w-full table-zebra">
                         <thead className="sticky top-0 bg-base-300">
@@ -954,7 +949,7 @@ const SMSDetails = () => {
 
                   {/* Paginación mejorada */}
                   {filteredArticles.length > itemsPerPage && (
-                    <div className="flex flex-col items-center gap-4">
+                    <div className="flex flex-col gap-4 items-center">
                       <div className="join">
                         <button 
                           className="join-item btn btn-sm"
@@ -1011,69 +1006,38 @@ const SMSDetails = () => {
             </div>
           </TabsContent>
 
-          {/* Tab: Estadísticas */}
-          <TabsContent value="statistics" className="mt-6">
-            <div className="space-y-6">
-              {loadingStats ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-8 h-8 border-t-2 border-b-2 rounded-full animate-spin border-primary"></div>
-                  <span className="ml-2">Cargando estadísticas...</span>
-                </div>
-              ) : statistics ? (
-                <div className="space-y-6">
-                  {/* Resumen General */}
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <div className="rounded-lg stat bg-primary text-primary-content">
-                      <div className="text-gray-100 stat-title">Total</div>
-                      <div className="stat-value">{statistics.general?.total_articles || 0}</div>
-                      <div className="text-gray-100 stat-desc">Artículos procesados</div>
-                    </div>
-                    <div className="rounded-lg stat bg-success text-success-content">
-                      <div className="text-gray-100 stat-title">Seleccionados</div>
-                      <div className="text-gray-100 stat-value">{statistics.general?.selected_count || 0}</div>
-                      <div className="text-gray-100 stat-desc">
-                        {statistics.general?.selection_rate || 0}% del total
-                      </div>
-                    </div>
-                    <div className="rounded-lg stat bg-error text-error-content">
-                      <div className="text-gray-100 stat-title">Rechazados</div>
-                      <div className="text-gray-100 stat-value">{statistics.general?.rejected_count || 0}</div>
-                      <div className="text-gray-100 stat-desc">Excluidos del estudio</div>
-                    </div>
-                    <div className="rounded-lg stat bg-warning text-warning-content">
-                      <div className="text-gray-100 stat-title">Pendientes</div>
-                      <div className="text-gray-100 stat-value">{statistics.general?.pending_count || 0}</div>
-                      <div className="text-gray-100 stat-desc">Por revisar</div>
-                    </div>
-                  </div>
 
-                  {/* Distribución por Estado */}
-                  {statistics.by_status && statistics.by_status.length > 0 && (
-                    <div className="shadow-lg card bg-base-100">
-                      <div className="card-body">
-                        <h3 className="card-title">Distribución por Estado</h3>
-                        <div className="space-y-2">
-                          {statistics.by_status.map((item, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 rounded bg-base-200">
-                              <div className="flex items-center">
-                                <div 
-                                  className="w-4 h-4 mr-2 rounded" 
-                                  style={{ backgroundColor: item.color }}
-                                ></div>
-                                <span className="text-sm">{item.status}</span>
-                              </div>
-                              <span className="font-semibold">{item.count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+          {/* Tab: Visualizaciones Avanzadas - NUEVA PESTAÑA */}
+          <TabsContent value="visualizations" className="mt-6">
+            <div className="space-y-6">
+              {loadingArticles ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="w-8 h-8 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
+                  <span className="ml-2">Cargando artículos para visualizaciones...</span>
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="mb-4">
+                    <FaChartArea className="mx-auto text-6xl text-gray-400" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-700">
+                    No hay datos para visualizar
+                  </h3>
+                  <p className="text-gray-600">
+                    Las visualizaciones aparecerán después de analizar PDFs en el proceso de extracción.
+                  </p>
+                  <Link 
+                    to={`/sms/${id}/process`} 
+                    className="mt-4 btn btn-primary btn-sm"
+                  >
+                    Ir al proceso de análisis
+                  </Link>
                 </div>
               ) : (
-                <div className="py-8 text-center">
-                  <p className="text-gray-500">No hay estadísticas disponibles para este SMS.</p>
-                </div>
+                <SMSAdvancedStatistics 
+                  smsTitle={sms.titulo_estudio}
+                  articles={articles}
+                />
               )}
             </div>
           </TabsContent>
