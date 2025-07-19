@@ -1,17 +1,21 @@
-// frontend/src/components/SMS/SMSAdvancedStatistics.jsx
-import React, { useState, useCallback } from 'react';
+// frontend/src/components/SMS/SMSAdvancedStatistics.jsx - VERSIÓN COMPLETA
+import React, { useState, useMemo } from 'react';
 import { 
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, ScatterChart, Scatter, 
-  BarChart, Bar
-} from 'recharts';
-import { FaDownload, FaProjectDiagram, FaGlobe, FaChartArea } from 'react-icons/fa';
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,Cell,} from 'recharts';
+import { 
+  FaChartBar, FaChartPie, FaChartLine, FaDownload, 
+  FaChevronDown, FaFileAlt, FaFilePdf, FaImage 
+} from 'react-icons/fa';
+import { smsService } from '@/services/smsService';
+import ReportGenerationModal from './ReportGenerationModal';
 
-const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
+const SMSAdvancedStatistics = ({ smsTitle, articles, smsId }) => {
   const [activeChart, setActiveChart] = useState('research-flow');
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
-  // Procesar datos para las nuevas visualizaciones
-  const processDataForVisualization = useCallback(() => {
+  // Procesar datos para las visualizaciones
+  const visualizationData = useMemo(() => {
     if (!articles || articles.length === 0) return null;
 
     try {
@@ -47,7 +51,7 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
       const bubbleChartData = Object.values(bubbleData).map(item => ({
         x: item.year,
         y: item.count,
-        z: item.count * 10, // Tamaño de la burbuja
+        z: item.count * 10,
         journal: item.journal,
         count: item.count,
         articles: item.articles
@@ -56,7 +60,6 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
       // 3. Datos para distribución por enfoque de investigación
       const researchFocusData = {};
       articles.forEach(article => {
-        // Analizar las respuestas a subpreguntas para determinar el enfoque
         const responses = [
           article.respuesta_subpregunta_1,
           article.respuesta_subpregunta_2, 
@@ -66,7 +69,6 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
         let focus = 'No clasificado';
         
         if (responses.length > 0) {
-          // Clasificar por palabras clave en las respuestas
           const allResponses = responses.join(' ').toLowerCase();
           
           if (allResponses.includes('experimental') || allResponses.includes('experimento')) {
@@ -98,15 +100,14 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
         percentage: ((count / articles.length) * 100).toFixed(1)
       }));
 
-      // 4. Datos para mapa de contexto (por palabras clave en resúmenes)
+      // 4. Datos para mapa de contexto
       const contextData = {};
       articles.forEach(article => {
         if (article.resumen && article.resumen.trim() !== '' && article.resumen !== 'None') {
-          // Extraer palabras clave del resumen
           const words = article.resumen.toLowerCase()
             .replace(/[^\w\s]/g, ' ')
             .split(/\s+/)
-            .filter(word => word.length > 4) // Solo palabras de más de 4 caracteres
+            .filter(word => word.length > 4)
             .filter(word => !['that', 'with', 'this', 'from', 'they', 'were', 'have', 'been', 'their', 'which', 'these', 'such', 'would', 'could', 'should', 'using', 'based', 'also', 'study', 'research', 'method', 'approach'].includes(word));
 
           words.forEach(word => {
@@ -123,7 +124,6 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
         }
       });
 
-      // Seleccionar las 15 palabras más frecuentes
       const contextChartData = Object.values(contextData)
         .sort((a, b) => b.value - a.value)
         .slice(0, 15)
@@ -145,17 +145,42 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
     }
   }, [articles]);
 
-  const visualizationData = processDataForVisualization();
-
-  // Debug - opcional, puedes eliminarlo después
-  console.log('SMSAdvancedStatistics - Articles:', articles?.length || 0);
-  console.log('SMSAdvancedStatistics - VisualizationData:', visualizationData);
-
   const downloadChart = () => {
     console.log('Generando Mapeo');
+    setShowDownloadMenu(false);
   };
 
+  // Nueva función para generar reporte metodológico
+  const handleGenerateReport = () => {
+    setShowReportModal(true);
+    setShowDownloadMenu(false);
+  };
 
+  // Nueva función para exportar reporte directo a PDF
+  const handleExportReportPDF = async () => {
+    try {
+      setShowDownloadMenu(false);
+      
+      console.log('Generando y descargando reporte PDF...');
+      
+      const response = await smsService.exportReportPDF(smsId);
+      
+      // Crear enlace de descarga
+      const blob = new Blob([response], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `methodology_report_${smsTitle.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (error) {
+      console.error('Error al exportar reporte:', error);
+      alert('Error al generar el reporte: ' + error.message);
+    }
+  };
 
   if (!articles || articles.length === 0) {
     return (
@@ -174,12 +199,11 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
   }
 
   const chartTabs = [
-    { id: 'research-flow', label: 'Flujo de Investigación', icon: FaProjectDiagram },
-    { id: 'bubble-analysis', label: 'Análisis de Burbujas', icon: FaChartArea },
-    { id: 'context-map', label: 'Mapa de Contexto', icon: FaGlobe },
+    { id: 'research-flow', label: 'Flujo de Investigación', icon: FaChartLine },
+    { id: 'bubble-analysis', label: 'Análisis de Burbujas', icon: FaChartBar },
+    { id: 'context-map', label: 'Mapa de Contexto', icon: FaChartPie },
   ];
 
-  // Colores para las gráficas
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FFC658', '#FF7C7C', '#8DD1E1', '#D084D0'];
 
   const renderResearchFlowChart = () => {
@@ -197,21 +221,18 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-center">Diagrama de Flujo PRISMA del Proceso de Investigación</h3>
         
-        {/* Diagrama de flujo estilo PRISMA - Exactamente como la imagen */}
         <div className="p-8 bg-white rounded-lg border">
           <div className="mx-auto space-y-6 max-w-6xl">
             
             {/* IDENTIFICACIÓN */}
             <div className="relative">
               <div className="grid grid-cols-12 gap-4 items-center">
-                {/* Etiqueta lateral */}
                 <div className="flex col-span-2 justify-center">
                   <div className="px-4 py-8 text-xs font-bold text-white whitespace-nowrap bg-cyan-400 rounded-lg transform origin-center -rotate-90">
                     Identification
                   </div>
                 </div>
                 
-                {/* Caja principal */}
                 <div className="col-span-5">
                   <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
                     <div className="font-semibold text-gray-600">
@@ -223,14 +244,10 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
                   </div>
                 </div>
                 
-                {/* Caja lateral derecha */}
                 <div className="col-span-5">
                   <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
                     <div className="text-xs font-semibold text-gray-600">
                       Additional studies identified through other resources
-                    </div>
-                    <div className="text-xs font-semibold text-gray-600">
-                      
                     </div>
                     <div className="mt-1 text-xs font-bold text-gray-600">(n = 0)</div>
                   </div>
@@ -249,14 +266,12 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
             {/* OVERVIEW */}
             <div className="relative">
               <div className="grid grid-cols-12 gap-4 items-center">
-                {/* Etiqueta lateral */}
                 <div className="flex col-span-2 justify-center">
                   <div className="px-4 py-8 text-xs font-bold text-white whitespace-nowrap bg-cyan-400 rounded-lg transform origin-center -rotate-90">
                     Overview
                   </div>
                 </div>
                 
-                {/* Caja principal */}
                 <div className="col-span-5">
                   <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
                     <div className="text-xs font-semibold text-gray-600">
@@ -266,13 +281,11 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
                   </div>
                 </div>
                 
-                {/* Línea horizontal hacia la derecha */}
                 <div className="flex col-span-1 justify-center">
                   <div className="w-full h-0.5 bg-black"></div>
                   <div className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-t-transparent border-b-transparent border-l-black"></div>
                 </div>
                 
-                {/* Caja de exclusión */}
                 <div className="col-span-4">
                   <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
                     <div className="text-xs font-semibold text-gray-600">
@@ -286,117 +299,15 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
               </div>
             </div>
 
-            {/* Flecha hacia abajo */}
-            <div className="flex justify-center">
-              <div className="w-0.5 h-8 bg-black"></div>
-            </div>
-            <div className="flex justify-center">
-              <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-black"></div>
-            </div>
-
-            {/* SELECCIÓN POR TÍTULO Y RESUMEN */}
+            {/* Resultado final */}
             <div className="relative">
               <div className="grid grid-cols-12 gap-4 items-center">
-                {/* Espacio para etiqueta */}
-                <div className="col-span-2"></div>
-                
-                {/* Caja principal */}
-                <div className="col-span-5">
-                  <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
-                    <div className="text-xs font-semibold text-gray-600">
-                      Articles for selection by title and abstract
-                    </div>
-                    <div className="mt-1 text-lg font-bold text-gray-600">(n = {flowData.titleReview})</div>
-                  </div>
-                </div>
-                
-                {/* Línea horizontal hacia la derecha */}
-                <div className="flex col-span-1 justify-center">
-                  <div className="w-full h-0.5 bg-black"></div>
-                  <div className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-t-transparent border-b-transparent border-l-black"></div>
-                </div>
-                
-                {/* Caja de exclusión */}
-                <div className="col-span-4">
-                  <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
-                    <div className="text-xs font-semibold text-gray-600">
-                      Irrelevant Articles Excluded (Based on inclusion and exclusion criteria)
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-gray-600">
-                      (n = {flowData.titleReview - flowData.abstractReview})
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Flecha hacia abajo */}
-            <div className="flex justify-center">
-              <div className="w-0.5 h-8 bg-black"></div>
-            </div>
-            <div className="flex justify-center">
-              <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-black"></div>
-            </div>
-
-            {/* ELEGIBILIDAD */}
-            <div className="relative">
-              <div className="grid grid-cols-12 gap-4 items-center">
-                {/* Etiqueta lateral */}
-                <div className="flex col-span-2 justify-center">
-                  <div className="px-4 py-8 text-xs font-bold text-white whitespace-nowrap bg-cyan-400 rounded-lg transform origin-center -rotate-90">
-                    Eligibility
-                  </div>
-                </div>
-                
-                {/* Caja principal */}
-                <div className="col-span-5">
-                  <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
-                    <div className="text-xs font-semibold text-gray-600">
-                      Articles for full-text eligibility evaluation
-                    </div>
-                    <div className="mt-1 text-lg font-bold text-gray-600">(n = {flowData.abstractReview})</div>
-                  </div>
-                </div>
-                
-                {/* Línea horizontal hacia la derecha */}
-                <div className="flex col-span-1 justify-center">
-                  <div className="w-full h-0.5 bg-black"></div>
-                  <div className="w-0 h-0 border-t-[6px] border-b-[6px] border-l-[8px] border-t-transparent border-b-transparent border-l-black"></div>
-                </div>
-                
-                {/* Caja de exclusión */}
-                <div className="col-span-4">
-                  <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
-                    <div className="text-xs font-semibold text-gray-600">
-                      Irrelevant Articles Excluded (Based on inclusion and exclusion criteria)
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-gray-600">
-                      (n = {flowData.abstractReview - flowData.finalSelected})
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Flecha hacia abajo */}
-            <div className="flex justify-center">
-              <div className="w-0.5 h-8 bg-black"></div>
-            </div>
-            <div className="flex justify-center">
-              <div className="w-0 h-0 border-l-[8px] border-r-[8px] border-t-[12px] border-l-transparent border-r-transparent border-t-black"></div>
-            </div>
-
-            {/* INCLUIDOS */}
-            <div className="relative">
-              <div className="grid grid-cols-12 gap-4 items-center">
-                {/* Etiqueta lateral */}
                 <div className="flex col-span-2 justify-center">
                   <div className="px-4 py-8 text-xs font-bold text-white whitespace-nowrap bg-cyan-400 rounded-lg transform origin-center -rotate-90">
                     Included
                   </div>
                 </div>
                 
-                {/* Caja principal final */}
                 <div className="col-span-5">
                   <div className="p-4 text-center bg-white rounded-lg border-2 border-black shadow-sm">
                     <div className="text-xs font-semibold text-gray-600">
@@ -408,7 +319,6 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
                   </div>
                 </div>
                 
-                {/* Espacio vacío */}
                 <div className="col-span-5"></div>
               </div>
             </div>
@@ -424,105 +334,17 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
       <h3 className="text-lg font-semibold text-center">Análisis de Burbujas: Distribución por Año y Revista</h3>
       {visualizationData.bubbleChart && visualizationData.bubbleChart.length > 0 ? (
         <ResponsiveContainer width="100%" height={500}>
-          <ScatterChart data={visualizationData.bubbleChart}>
+          <BarChart data={visualizationData.bubbleChart}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="x" 
-              name="Año" 
-              type="category"
-              angle={-45}
-              textAnchor="end"
-              height={100}
-            />
+            <XAxis dataKey="x" name="Año" />
             <YAxis dataKey="y" name="Cantidad" />
-            <Tooltip 
-              cursor={{ strokeDasharray: '3 3' }}
-              content={({ active, payload }) => {
-                if (active && payload && payload.length) {
-                  const data = payload[0].payload;
-                  return (
-                    <div className="p-3 bg-white rounded border shadow-lg">
-                      <p className="font-semibold">{data.journal}</p>
-                      <p>Año: {data.x}</p>
-                      <p>Artículos: {data.count}</p>
-                    </div>
-                  );
-                }
-                return null;
-              }}
-            />
-            <Scatter 
-              dataKey="z" 
-              fill="#8884d8" 
-              fillOpacity={0.6}
-              stroke="#8884d8"
-              strokeWidth={2}
-            />
-          </ScatterChart>
+            <Tooltip />
+            <Bar dataKey="y" fill="#8884d8" />
+          </BarChart>
         </ResponsiveContainer>
       ) : (
         <div className="p-8 text-center text-gray-600">
           <p>No hay suficientes datos para generar la gráfica de burbujas</p>
-        </div>
-      )}
-      <div className="p-3 rounded-lg bg-base-200">
-        <p className="text-xs text-gray-600">
-          El tamaño de cada burbuja representa la cantidad de artículos. 
-          Hover sobre las burbujas para ver detalles de la revista y año.
-        </p>
-      </div>
-    </div>
-  );
-
-  const renderResearchFocusChart = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-center">Distribución de Estudios por Enfoque de Investigación</h3>
-      {visualizationData.researchFocus && visualizationData.researchFocus.length > 0 ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <ResponsiveContainer width="100%" height={350}>
-            <PieChart>
-              <Pie
-                data={visualizationData.researchFocus}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percentage }) => `${name}: ${percentage}%`}
-                outerRadius={120}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {visualizationData.researchFocus.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          
-          <div className="space-y-4">
-            <h4 className="font-semibold">Desglose por Enfoque</h4>
-            <div className="space-y-2">
-              {visualizationData.researchFocus.map((item, index) => (
-                <div key={index} className="flex justify-between items-center p-3 rounded-lg bg-base-100">
-                  <div className="flex items-center">
-                    <div 
-                      className="mr-3 w-4 h-4 rounded" 
-                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                    ></div>
-                    <span className="text-xs font-medium">{item.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-semibold">{item.value}</div>
-                    <div className="text-xs text-gray-600">{item.percentage}%</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="p-8 text-center text-gray-500">
-          <p>No hay suficientes datos para clasificar por enfoque de investigación</p>
         </div>
       )}
     </div>
@@ -532,43 +354,19 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-center">Mapa de Contexto: Términos Más Frecuentes</h3>
       {visualizationData.contextMap && visualizationData.contextMap.length > 0 ? (
-        <>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart
-              data={visualizationData.contextMap}
-              layout="horizontal"
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={100} />
-              <Tooltip />
-              <Bar dataKey="value" fill="#8884d8">
-                {visualizationData.contextMap.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          
-          {/* Lista complementaria */}
-          <div className="p-3 rounded-lg bg-base-200">
-            <h4 className="mb-3 font-semibold">Términos Más Relevantes</h4>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-              {visualizationData.contextMap.slice(0, 10).map((item, index) => (
-                <div key={index} className="flex items-center p-3 rounded bg-base-100">
-                  <div 
-                    className="mr-2 w-3 h-3 rounded" 
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  ></div>
-                  <div>
-                    <div className="text-xs font-medium">{item.name}</div>
-                    <div className="text-xs text-gray-500">{item.value} veces</div>
-                  </div>
-                </div>
+        <ResponsiveContainer width="100%" height={400}>
+          <BarChart data={visualizationData.contextMap} layout="horizontal">
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" />
+            <YAxis dataKey="name" type="category" width={100} />
+            <Tooltip />
+            <Bar dataKey="value" fill="#8884d8">
+              {visualizationData.contextMap.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
-            </div>
-          </div>
-        </>
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       ) : (
         <div className="p-8 text-center text-gray-500">
           <p>No hay suficientes datos en los resúmenes para generar el mapa de contexto</p>
@@ -583,8 +381,6 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
         return renderResearchFlowChart();
       case 'bubble-analysis':
         return renderBubbleChart();
-      case 'research-focus':
-        return renderResearchFocusChart();
       case 'context-map':
         return renderContextMapChart();
       default:
@@ -594,19 +390,68 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header modificado con menú desplegable */}
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold">Visualizaciones Avanzadas</h2>
           <p className="text-gray-600">{smsTitle}</p>
         </div>
-        <button
-          onClick={downloadChart}
-          className="btn btn-outline btn-sm"
-        >
-          <FaDownload className="mr-2" />
-          Descargar
-        </button>
+        
+        {/* Menú desplegable de descarga */}
+        <div className="relative">
+          <button
+            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+            className="btn btn-outline btn-sm"
+          >
+            <FaDownload className="mr-2" />
+            Descargar
+            <FaChevronDown className="ml-2" />
+          </button>
+          
+          {showDownloadMenu && (
+            <div className="absolute right-0 z-10 mt-2 w-64 bg-white rounded-lg border shadow-lg">
+              <div className="py-2">
+                {/* Opción 1: Descargar gráfica actual */}
+                <button
+                  onClick={downloadChart}
+                  className="flex items-center px-4 py-2 w-full text-left hover:bg-gray-100"
+                >
+                  <FaImage className="mr-3 text-blue-500" />
+                  <div>
+                    <div className="font-medium">Descargar Gráfica</div>
+                    <div className="text-xs text-gray-500">Imagen de la visualización actual</div>
+                  </div>
+                </button>
+                
+                <hr className="my-1" />
+                
+                {/* Opción 2: Generar reporte metodológico (con vista previa) */}
+                <button
+                  onClick={handleGenerateReport}
+                  className="flex items-center px-4 py-2 w-full text-left hover:bg-gray-100"
+                >
+                  <FaFileAlt className="mr-3 text-green-500" />
+                  <div>
+                    <div className="font-medium">Generar Reporte Metodológico</div>
+                    <div className="text-xs text-gray-500">Texto completo con vista previa</div>
+                  </div>
+                </button>
+                
+                {/* Opción 3: Exportar reporte directo a PDF */}
+                <button
+                  onClick={handleExportReportPDF}
+                  className="flex items-center px-4 py-2 w-full text-left hover:bg-gray-100"
+                >
+                  <FaFilePdf className="mr-3 text-red-500" />
+                  <div>
+                    <div className="font-medium">Exportar Reporte PDF</div>
+                    <div className="text-xs text-gray-500">Descarga directa en formato PDF</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Chart Navigation */}
@@ -629,6 +474,15 @@ const SMSAdvancedStatistics = ({ smsTitle, articles }) => {
           {renderActiveChart()}
         </div>
       </div>
+
+      {/* Modal de generación de reportes */}
+      <ReportGenerationModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        smsId={smsId}
+        smsTitle={smsTitle}
+        articles={articles}
+      />
     </div>
   );
 };
