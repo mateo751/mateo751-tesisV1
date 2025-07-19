@@ -1,13 +1,16 @@
 // frontend/src/components/SMS/SMSDetails.jsx - Versión actualizada con visualizaciones avanzadas
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FaArrowLeft, FaEdit, FaTable, FaFileExport, FaEye, FaChartArea } from 'react-icons/fa';
+// En las importaciones de iconos
+import { FaArrowLeft, FaEdit, FaTable, FaFileExport, FaEye, FaChartArea, FaBrain } from 'react-icons/fa';
 import { useSMS } from '@/context/SMSContext';
 import { smsService } from '@/services/smsService';
 import Layout from '@/components/layout/Layout';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/common/Tabs';
 import ArticleEditModal from '@/components/sms/ArticleEditModal';
 import SMSAdvancedStatistics from '@/components/SMS/SMSAdvancedStatistics'; // Nueva importación
+import SemanticAnalysisVisualization from '@/components/sms/SemanticAnalysisVisualization';
+import PrismaDiagramVisualization from '@/components/sms/PrismaDiagramVisualization';
 
 const SMSDetails = () => {
   const { id } = useParams();
@@ -450,7 +453,7 @@ const SMSDetails = () => {
 
         {/* Tabs Navigation - ACTUALIZADO CON NUEVA PESTAÑA */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 w-full">
+          <TabsList className="grid grid-cols-5 w-full"> {/* Cambiar de grid-cols-3 a grid-cols-4 */}
             <TabsTrigger value="details">
               <FaEye className="mr-2" />
               Detalles
@@ -463,6 +466,15 @@ const SMSDetails = () => {
               <FaChartArea className="mr-2" />
               Visualizaciones
             </TabsTrigger>
+            <TabsTrigger value="prisma-diagram"> {/* NUEVA PESTAÑA */}
+              <FaBrain className="mr-2" />
+              diagrama de PRIZMA
+            </TabsTrigger>
+            <TabsTrigger value="semantic-analysis"> {/* NUEVA PESTAÑA */}
+              <FaBrain className="mr-2" />
+              Análisis Semántico
+            </TabsTrigger>
+            
           </TabsList>
 
           {/* Tab: Detalles */}
@@ -1037,11 +1049,81 @@ const SMSDetails = () => {
                 <SMSAdvancedStatistics 
                   smsTitle={sms.titulo_estudio}
                   articles={articles}
+                  smsId={id}
+                />
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value="semantic-analysis" className="mt-6">
+            <div className="space-y-6">
+              {loadingArticles ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="w-8 h-8 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
+                  <span className="ml-2">Cargando artículos para análisis semántico...</span>
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="mb-4">
+                    <FaBrain className="mx-auto text-6xl text-gray-400" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-700">
+                    No hay datos para análisis semántico
+                  </h3>
+                  <p className="text-gray-600">
+                    El análisis semántico requiere artículos procesados. 
+                    Complete el proceso de extracción primero.
+                  </p>
+                  <Link 
+                    to={`/sms/${id}/process`} 
+                    className="mt-4 btn btn-primary btn-sm"
+                  >
+                    Ir al proceso de análisis
+                  </Link>
+                </div>
+              ) : (
+                <SemanticAnalysisVisualization 
+                  smsId={id}
+                  smsTitle={sms.titulo_estudio}
+                />
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value="prisma-diagram" className="mt-6">
+            <div className="space-y-6">
+              {loadingArticles ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="w-8 h-8 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
+                  <span className="ml-2">Cargando artículos para análisis semántico...</span>
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="mb-4">
+                    <FaBrain className="mx-auto text-6xl text-gray-400" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-700">
+                    No hay datos para análisis semántico
+                  </h3>
+                  <p className="text-gray-600">
+                    El análisis semántico requiere artículos procesados. 
+                    Complete el proceso de extracción primero.
+                  </p>
+                  <Link 
+                    to={`/sms/${id}/process`} 
+                    className="mt-4 btn btn-primary btn-sm"
+                  >
+                    Ir al proceso de análisis
+                  </Link>
+                </div>
+              ) : (
+                <PrismaDiagramVisualization
+                  smsId={id}
+                  smsTitle={sms.titulo_estudio}
                 />
               )}
             </div>
           </TabsContent>
         </Tabs>
+
 
         {/* Modal de detalles del artículo */}
         <ArticleModal />

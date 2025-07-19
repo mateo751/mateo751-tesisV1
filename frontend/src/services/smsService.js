@@ -460,6 +460,78 @@ export const smsService = {
             throw error;
         }
     },
+    // Añadir al final del objeto smsService:
+
+    generateReport: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            
+            console.log('Generando reporte para SMS:', smsId);
+            
+            const response = await api.post(`/api/sms/sms/${smsId}/generate-report/`);
+            console.log('Reporte generado:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al generar reporte:', error);
+            throw new Error(error.response?.data?.error || 'Error al generar el reporte');
+        }
+    },
+
+    exportReportPDF: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            
+            console.log('Exportando reporte PDF para SMS:', smsId);
+            
+            const response = await api.post(`/api/sms/sms/${smsId}/export-report/`, {}, {
+                responseType: 'blob'
+            });
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al exportar reporte PDF:', error);
+            throw new Error(error.response?.data?.error || 'Error al exportar el reporte');
+        }
+    },
+
+    // En frontend/src/services/smsService.js, añade este método
+    getAdvancedSemanticAnalysis: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            
+            console.log('Obteniendo análisis semántico avanzado para SMS:', smsId);
+            
+            const response = await api.get(`/api/sms/sms/${smsId}/advanced-analysis/`);
+            console.log('Análisis semántico obtenido:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al obtener análisis semántico:', error);
+            
+            if (error.response?.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '/auth/login';
+            }
+            
+            throw error;
+        }
+    },
+    getPrismaDiagram: async (smsId) => {
+        try {
+            const response = await api.get(`/api/sms/sms/${smsId}/prisma-diagram/`);
+            return response.data;
+        } catch (error) {
+            console.error('Error al obtener diagrama PRISMA:', error);
+            throw error;
+        }
+    },
 };
 
 export default smsService;

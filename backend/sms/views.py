@@ -1,3 +1,6 @@
+# En la parte superior de backend/sms/views.py, añade estas importaciones
+
+# Importaciones existentes de Django y DRF (mantén las que ya tienes)
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,12 +9,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
 from django.db.models import Count
+from django.utils import timezone  # ← NUEVA IMPORTACIÓN para timezone
 import csv
 import io
 import os
 import tempfile
 import traceback
 
+# Importaciones de tus modelos y serializadores (mantén las existentes)
 from .models import SMS, Article
 from .serializers import (
     SMSSerializer, 
@@ -20,8 +25,13 @@ from .serializers import (
     SMSCreateUpdateSerializer,
     ArticleSerializer
 )
+
+# Importaciones de servicios (mantén las existentes)
 from .search_utils import extract_keywords_and_synonyms, generate_search_query
 from .science_parse import setup_science_parse, extract_pdf_metadata, analyze_with_chatgpt
+
+# NUEVA IMPORTACIÓN para el análisis semántico
+from .semantic_analysis import SemanticResearchAnalyzer  # ← NUEVA IMPORTACIÓN
 
 # Intenta configurar Science-Parse al iniciar
 try:
@@ -284,6 +294,219 @@ class SMSViewSet(viewsets.ModelViewSet):
                 {"error": f"Error al obtener estadísticas: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
+    @action(detail=True, methods=['post'], url_path='generate-report')
+    def generate_report(self, request, pk=None):
+        """
+        Generar reporte metodológico automático
+        POST /api/sms/{id}/generate-report/
+        """
+        try:
+            sms = self.get_object()
+            
+            # Obtener artículos y estadísticas
+            articles = sms.articles.all()
+            
+            # Generar estadísticas básicas
+            total_articles = articles.count()
+            selected_count = articles.filter(estado='SELECTED').count()
+            rejected_count = articles.filter(estado='REJECTED').count()
+            pending_count = articles.filter(estado='PENDING').count()
+            
+            # Datos para el template
+            template_data = {
+                'sms_data': {
+                    'titulo_estudio': sms.titulo_estudio,
+                    'autores': sms.autores,
+                    'pregunta_principal': sms.pregunta_principal,
+                    'subpregunta_1': sms.subpregunta_1,
+                    'subpregunta_2': sms.subpregunta_2,
+                    'subpregunta_3': sms.subpregunta_3,
+                    'cadena_busqueda': sms.cadena_busqueda,
+                    'anio_inicio': sms.anio_inicio,
+                    'anio_final': sms.anio_final,
+                    'criterios_inclusion': sms.criterios_inclusion,
+                    'criterios_exclusion': sms.criterios_exclusion,
+                    'fuentes': sms.fuentes
+                },
+                'statistics': {
+                    'total_articles': total_articles,
+                    'selected_count': selected_count,
+                    'rejected_count': rejected_count,
+                    'pending_count': pending_count,
+                    'selection_rate': round((selected_count / total_articles * 100), 2) if total_articles > 0 else 0
+                },
+                'articles_sample': list(articles.filter(estado='SELECTED')[:5].values(
+                    'titulo', 'autores', 'anio_publicacion', 'journal'
+                ))
+            }
+            
+            # Generar el reporte usando el servicio
+            from .services import ReportGeneratorService
+            report_service = ReportGeneratorService()
+            generated_report = report_service.generate_methodology_section(template_data)
+            
+            return Response({
+                'success': True,
+                'report_content': generated_report,
+                'metadata': template_data
+            })
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Error al generar reporte: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='export-report')
+    def export_report(self, request, pk=None):
+        """
+        Exportar reporte a PDF
+        POST /api/sms/{id}/export-report/
+        """
+        try:
+            # Generar el contenido del reporte
+            report_response = self.generate_report(request, pk)
+            
+            if report_response.status_code != 200:
+                return report_response
+            
+            report_content = report_response.data['report_content']
+            
+            # Por ahora, devolver como texto plano (luego implementaremos PDF)
+            response = HttpResponse(report_content, content_type='text/plain')
+            response['Content-Disposition'] = f'attachment; filename="methodology_report_{pk}.txt"'
+            
+            return response
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Error al exportar reporte: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    from .semantic_analysis import SemanticResearchAnalyzer
+
+    @action(detail=True, methods=['get'], url_path='advanced-analysis')
+    def get_advanced_semantic_analysis(self, request, pk=None):
+        """
+        Endpoint para análisis semántico avanzado de enfoques de investigación.
+        
+        Utiliza machine learning para agrupar automáticamente artículos
+        por enfoques similares y genera visualizaciones sofisticadas.
+        """
+        try:
+            sms = self.get_object()
+            
+            # Obtenemos todos los artículos del SMS
+            articles = sms.articles.all()
+            
+            if not articles.exists():
+                return Response({
+                    'error': 'No hay artículos disponibles para análisis',
+                    'success': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Convertimos queryset a lista de diccionarios
+            articles_data = []
+            for article in articles:
+                articles_data.append({
+                    'id': article.id,
+                    'titulo': article.titulo or '',
+                    'autores': article.autores or '',
+                    'anio_publicacion': article.anio_publicacion,
+                    'resumen': article.resumen or '',
+                    'respuesta_subpregunta_1': article.respuesta_subpregunta_1 or '',
+                    'respuesta_subpregunta_2': article.respuesta_subpregunta_2 or '',
+                    'respuesta_subpregunta_3': article.respuesta_subpregunta_3 or '',
+                    'metodologia': article.metodologia or '',
+                    'palabras_clave': article.palabras_clave or '',
+                    'journal': article.journal or '',
+                    'doi': article.doi or ''
+                })
+            
+            # Inicializamos el analizador semántico
+            analyzer = SemanticResearchAnalyzer()
+            
+            # Generamos el análisis completo
+            analysis_result = analyzer.generar_figura_distribucion_estudios(articles_data)
+            
+            # Añadimos información del SMS
+            analysis_result['sms_info'] = {
+                'id': sms.id,
+                'titulo': sms.titulo_estudio,
+                'total_articles': len(articles_data),
+                'analysis_date': timezone.now().isoformat()
+            }
+            
+            return Response(analysis_result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'error': f'Error en análisis semántico: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @action(detail=True, methods=['get'], url_path='prisma-diagram')
+    def get_prisma_diagram(self, request, pk=None):
+        """
+        Endpoint para generar diagrama PRISMA inteligente.
+        
+        GET /api/sms/{id}/prisma-diagram/
+        """
+        try:
+            sms = self.get_object()
+            articles = sms.articles.all()
+            
+            if not articles.exists():
+                return Response({
+                    'error': 'No hay artículos disponibles para generar diagrama PRISMA',
+                    'success': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Convertimos a formato necesario
+            articles_data = []
+            for article in articles:
+                articles_data.append({
+                    'id': article.id,
+                    'titulo': article.titulo or '',
+                    'resumen': article.resumen or '',
+                    'estado': article.estado or 'PENDING',
+                    'respuesta_subpregunta_1': article.respuesta_subpregunta_1 or '',
+                    'respuesta_subpregunta_2': article.respuesta_subpregunta_2 or '',
+                    'respuesta_subpregunta_3': article.respuesta_subpregunta_3 or '',
+                })
+            
+            # Información del SMS
+            sms_info = {
+                'titulo': sms.titulo_estudio,
+                'criterios_inclusion': sms.criterios_inclusion,
+                'criterios_exclusion': sms.criterios_exclusion,
+                'fecha_creacion': sms.fecha_creacion
+            }
+            
+            # Generamos diagrama PRISMA
+            analyzer = SemanticResearchAnalyzer()
+            result = analyzer.generar_diagrama_prisma(articles_data, sms_info)
+            
+            if result['success']:
+                result['sms_info'] = {
+                    'id': sms.id,
+                    'titulo': sms.titulo_estudio,
+                    'total_articles': len(articles_data)
+                }
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error generando diagrama PRISMA: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ArticleViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar artículos dentro de un SMS"""
@@ -712,3 +935,4 @@ class ArticleViewSet(viewsets.ModelViewSet):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
