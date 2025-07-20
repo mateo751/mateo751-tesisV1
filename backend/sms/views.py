@@ -507,6 +507,71 @@ class SMSViewSet(viewsets.ModelViewSet):
                 'error': f'Error generando diagrama PRISMA: {str(e)}',
                 'success': False
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    @action(detail=True, methods=['get'], url_path='bubble-chart')
+    def get_bubble_chart_analysis(self, request, pk=None):
+        """
+        Endpoint para generar gráfico de burbujas de técnicas por enfoque.
+        
+        GET /api/sms/{id}/bubble-chart/
+        """
+        try:
+            sms = self.get_object()
+            articles = sms.articles.all()
+            
+            if not articles.exists():
+                return Response({
+                    'error': 'No hay artículos disponibles para generar gráfico de burbujas',
+                    'success': False
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Convertir a formato necesario
+            articles_data = []
+            for article in articles:
+                articles_data.append({
+                    'id': article.id,
+                    'titulo': article.titulo or '',
+                    'autores': article.autores or '',
+                    'anio_publicacion': article.anio_publicacion,
+                    'resumen': article.resumen or '',
+                    'respuesta_subpregunta_1': article.respuesta_subpregunta_1 or '',
+                    'respuesta_subpregunta_2': article.respuesta_subpregunta_2 or '',
+                    'respuesta_subpregunta_3': article.respuesta_subpregunta_3 or '',
+                    'metodologia': article.metodologia or '',
+                    'palabras_clave': article.palabras_clave or '',
+                    'journal': article.journal or '',
+                    'doi': article.doi or '',
+                    'tipo_registro': article.tipo_registro or '',
+                    'tipo_tecnica': article.tipo_tecnica or '',
+                    'enfoque': article.enfoque or ''
+                })
+            
+            # Información del SMS
+            sms_info = {
+                'titulo': sms.titulo_estudio,
+                'criterios_inclusion': sms.criterios_inclusion,
+                'criterios_exclusion': sms.criterios_exclusion,
+                'fecha_creacion': sms.fecha_creacion
+            }
+            
+            # Generar gráfico de burbujas
+            analyzer = SemanticResearchAnalyzer()
+            result = analyzer.generar_grafico_burbujas_tecnicas(articles_data)
+            
+            if result['success']:
+                result['sms_info'] = {
+                    'id': sms.id,
+                    'titulo': sms.titulo_estudio,
+                    'total_articles': len(articles_data)
+                }
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error generando gráfico de burbujas: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ArticleViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar artículos dentro de un SMS"""

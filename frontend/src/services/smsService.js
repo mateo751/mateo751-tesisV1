@@ -532,6 +532,31 @@ export const smsService = {
             throw error;
         }
     },
+    // Añadir este método al objeto smsService en frontend/src/services/smsService.js
+
+    getBubbleChartAnalysis: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            
+            console.log('Obteniendo análisis de gráfico de burbujas para SMS:', smsId);
+            
+            const response = await api.get(`/api/sms/sms/${smsId}/bubble-chart/`);
+            console.log('Análisis de burbujas obtenido:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al obtener análisis de burbujas:', error);
+            
+            if (error.response?.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '/auth/login';
+            }
+            
+            throw error;
+        }
+    },
 };
 
 export default smsService;

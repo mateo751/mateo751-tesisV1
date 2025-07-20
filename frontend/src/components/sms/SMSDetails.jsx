@@ -11,6 +11,7 @@ import ArticleEditModal from '@/components/sms/ArticleEditModal';
 import SMSAdvancedStatistics from '@/components/SMS/SMSAdvancedStatistics'; // Nueva importación
 import SemanticAnalysisVisualization from '@/components/sms/SemanticAnalysisVisualization';
 import PrismaDiagramVisualization from '@/components/sms/PrismaDiagramVisualization';
+import BubbleChartVisualization from '@/components/sms/BubbleChartVisualization';
 
 const SMSDetails = () => {
   const { id } = useParams();
@@ -462,10 +463,6 @@ const SMSDetails = () => {
               <FaTable className="mr-2" />
               Extracción de Datos
             </TabsTrigger>
-            <TabsTrigger value="visualizations">
-              <FaChartArea className="mr-2" />
-              Visualizaciones
-            </TabsTrigger>
             <TabsTrigger value="prisma-diagram"> {/* NUEVA PESTAÑA */}
               <FaBrain className="mr-2" />
               diagrama de PRIZMA
@@ -474,7 +471,10 @@ const SMSDetails = () => {
               <FaBrain className="mr-2" />
               Análisis Semántico
             </TabsTrigger>
-            
+            <TabsTrigger value="bubble-chart"> {/* NUEVA PESTAÑA */}
+              <FaBrain className="mr-2" />
+              Diagrama de burbuja
+            </TabsTrigger>
           </TabsList>
 
           {/* Tab: Detalles */}
@@ -1116,6 +1116,40 @@ const SMSDetails = () => {
                 </div>
               ) : (
                 <PrismaDiagramVisualization
+                  smsId={id}
+                  smsTitle={sms.titulo_estudio}
+                />
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value="bubble-chart" className="mt-6">
+            <div className="space-y-6">
+              {loadingArticles ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="w-8 h-8 rounded-full border-t-2 border-b-2 animate-spin border-primary"></div>
+                  <span className="ml-2">Cargando artículos para gráfico de burbujas...</span>
+                </div>
+              ) : articles.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="mb-4">
+                  <FaBrain className="mx-auto text-6xl text-gray-400" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-gray-700">
+                    No hay datos para gráfico de burbujas
+                  </h3>
+                  <p className="text-gray-600">
+                    El gráfico de burbujas requiere artículos procesados con técnicas identificadas.
+                    Complete el proceso de extracción primero.
+                  </p>
+                  <Link 
+                    to={`/sms/${id}/process`} 
+                    className="mt-4 btn btn-primary btn-sm"
+                  >
+                    Ir al proceso de análisis
+                  </Link>
+                </div>
+              ) : (
+                <BubbleChartVisualization 
                   smsId={id}
                   smsTitle={sms.titulo_estudio}
                 />
