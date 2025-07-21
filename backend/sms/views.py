@@ -32,7 +32,7 @@ from .science_parse import setup_science_parse, extract_pdf_metadata, analyze_wi
 
 # NUEVA IMPORTACIÓN para el análisis semántico
 from .semantic_analysis import SemanticResearchAnalyzer  # ← NUEVA IMPORTACIÓN
-
+from .enhanced_report_service import EnhancedReportGeneratorService
 # Intenta configurar Science-Parse al iniciar
 try:
     setup_science_parse()
@@ -295,99 +295,229 @@ class SMSViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    @action(detail=True, methods=['post'], url_path='generate-report')
-    def generate_report(self, request, pk=None):
+    @action(detail=True, methods=['post'], url_path='generate-comprehensive-report')
+    def generate_comprehensive_report(self, request, pk=None):
         """
-        Generar reporte metodológico automático
-        POST /api/sms/{id}/generate-report/
+        Generar reporte metodológico completo con visualizaciones integradas
+        POST /api/sms/{id}/generate-comprehensive-report/
         """
         try:
             sms = self.get_object()
-            
-            # Obtener artículos y estadísticas
             articles = sms.articles.all()
             
-            # Generar estadísticas básicas
-            total_articles = articles.count()
-            selected_count = articles.filter(estado='SELECTED').count()
-            rejected_count = articles.filter(estado='REJECTED').count()
-            pending_count = articles.filter(estado='PENDING').count()
+            if not articles.exists():
+                return Response({
+                    'error': 'No hay artículos disponibles para generar el reporte',
+                    'success': False
+                }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Datos para el template
-            template_data = {
-                'sms_data': {
-                    'titulo_estudio': sms.titulo_estudio,
-                    'autores': sms.autores,
-                    'pregunta_principal': sms.pregunta_principal,
-                    'subpregunta_1': sms.subpregunta_1,
-                    'subpregunta_2': sms.subpregunta_2,
-                    'subpregunta_3': sms.subpregunta_3,
-                    'cadena_busqueda': sms.cadena_busqueda,
-                    'anio_inicio': sms.anio_inicio,
-                    'anio_final': sms.anio_final,
-                    'criterios_inclusion': sms.criterios_inclusion,
-                    'criterios_exclusion': sms.criterios_exclusion,
-                    'fuentes': sms.fuentes
-                },
-                'statistics': {
-                    'total_articles': total_articles,
-                    'selected_count': selected_count,
-                    'rejected_count': rejected_count,
-                    'pending_count': pending_count,
-                    'selection_rate': round((selected_count / total_articles * 100), 2) if total_articles > 0 else 0
-                },
-                'articles_sample': list(articles.filter(estado='SELECTED')[:5].values(
-                    'titulo', 'autores', 'anio_publicacion', 'journal'
-                ))
+            # Preparar datos del SMS
+            sms_data = {
+                'titulo_estudio': sms.titulo_estudio,
+                'autores': sms.autores,
+                'pregunta_principal': sms.pregunta_principal,
+                'subpregunta_1': sms.subpregunta_1,
+                'subpregunta_2': sms.subpregunta_2,
+                'subpregunta_3': sms.subpregunta_3,
+                'cadena_busqueda': sms.cadena_busqueda,
+                'anio_inicio': sms.anio_inicio,
+                'anio_final': sms.anio_final,
+                'criterios_inclusion': sms.criterios_inclusion,
+                'criterios_exclusion': sms.criterios_exclusion,
+                'fuentes': sms.fuentes
             }
             
-            # Generar el reporte usando el servicio
-            from .services import ReportGeneratorService
-            report_service = ReportGeneratorService()
-            generated_report = report_service.generate_methodology_section(template_data)
+            # Preparar datos de artículos
+            articles_data = []
+            for article in articles:
+                articles_data.append({
+                    'id': article.id,
+                    'titulo': article.titulo or '',
+                    'autores': article.autores or '',
+                    'anio_publicacion': article.anio_publicacion,
+                    'journal': article.journal or '',
+                    'doi': article.doi or '',
+                    'resumen': article.resumen or '',
+                    'estado': article.estado,
+                    'respuesta_subpregunta_1': article.respuesta_subpregunta_1 or '',
+                    'respuesta_subpregunta_2': article.respuesta_subpregunta_2 or '',
+                    'respuesta_subpregunta_3': article.respuesta_subpregunta_3 or '',
+                })
             
-            return Response({
-                'success': True,
-                'report_content': generated_report,
-                'metadata': template_data
-            })
+            # Obtener visualizaciones del sistema
+            visualizations_data = self._get_all_visualizations(pk)
             
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return Response(
-                {'error': f'Error al generar reporte: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            # Generar reporte completo
+            report_service = EnhancedReportGeneratorService()
+            pdf_content = report_service.generate_comprehensive_report(
+                sms_data, articles_data, visualizations_data
             )
-
-    @action(detail=True, methods=['post'], url_path='export-report')
-    def export_report(self, request, pk=None):
-        """
-        Exportar reporte a PDF
-        POST /api/sms/{id}/export-report/
-        """
-        try:
-            # Generar el contenido del reporte
-            report_response = self.generate_report(request, pk)
             
-            if report_response.status_code != 200:
-                return report_response
-            
-            report_content = report_response.data['report_content']
-            
-            # Por ahora, devolver como texto plano (luego implementaremos PDF)
-            response = HttpResponse(report_content, content_type='text/plain')
-            response['Content-Disposition'] = f'attachment; filename="methodology_report_{pk}.txt"'
+            # Devolver como respuesta HTTP para descarga
+            response = HttpResponse(pdf_content, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="comprehensive_report_{pk}.pdf"'
             
             return response
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return Response(
-                {'error': f'Error al exportar reporte: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                'error': f'Error al generar reporte completo: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'], url_path='preview-comprehensive-report')
+    def preview_comprehensive_report(self, request, pk=None):
+        """
+        Generar preview del reporte con metadatos
+        GET /api/sms/{id}/preview-comprehensive-report/
+        """
+        try:
+            sms = self.get_object()
+            articles = sms.articles.all()
+            
+            # Obtener estadísticas para el preview
+            total_articles = articles.count()
+            selected_articles = articles.filter(estado='SELECTED').count()
+            
+            # Análisis por año
+            year_distribution = {}
+            for article in articles:
+                year = article.anio_publicacion or 'Unknown'
+                year_distribution[year] = year_distribution.get(year, 0) + 1
+            
+            # Visualizaciones disponibles
+            visualizations_status = self._check_visualizations_availability(pk)
+            
+            preview_data = {
+                'sms_info': {
+                    'id': sms.id,
+                    'titulo': sms.titulo_estudio,
+                    'autores': sms.autores,
+                    'fecha_creacion': sms.fecha_creacion
+                },
+                'statistics': {
+                    'total_articles': total_articles,
+                    'selected_articles': selected_articles,
+                    'selection_rate': round((selected_articles / total_articles * 100), 2) if total_articles > 0 else 0,
+                    'year_distribution': year_distribution
+                },
+                'visualizations_available': visualizations_status,
+                'report_sections': [
+                    'Title and Abstract',
+                    'Introduction with AI-generated content',
+                    'Detailed Methodology',
+                    'PRISMA Flow Diagram',
+                    'Semantic Analysis Visualization',
+                    'Bubble Chart Correlation',
+                    'Results and Discussion',
+                    'Selected Studies Table',
+                    'References (APA format)',
+                    'AI-generated Conclusions'
+                ]
+            }
+            
+            return Response(preview_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Error al generar preview: {str(e)}',
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_all_visualizations(self, sms_id):
+        """Obtener todas las visualizaciones disponibles del sistema"""
+        visualizations_data = {}
+        
+        try:
+            # Análisis semántico
+            from .semantic_analysis import SemanticResearchAnalyzer
+            analyzer = SemanticResearchAnalyzer()
+            
+            # Obtener artículos
+            sms = self.get_object()
+            articles = sms.articles.all()
+            
+            articles_data = []
+            for article in articles:
+                articles_data.append({
+                    'id': article.id,
+                    'titulo': article.titulo or '',
+                    'autores': article.autores or '',
+                    'anio_publicacion': article.anio_publicacion,
+                    'resumen': article.resumen or '',
+                    'respuesta_subpregunta_1': article.respuesta_subpregunta_1 or '',
+                    'respuesta_subpregunta_2': article.respuesta_subpregunta_2 or '',
+                    'respuesta_subpregunta_3': article.respuesta_subpregunta_3 or '',
+                    'metodologia': article.metodologia or '',
+                    'palabras_clave': article.palabras_clave or '',
+                    'journal': article.journal or '',
+                    'doi': article.doi or '',
+                    'estado': article.estado,
+                })
+            
+            # Generar análisis semántico
+            semantic_result = analyzer.generar_figura_distribucion_estudios(articles_data)
+            if semantic_result.get('success'):
+                visualizations_data['semantic_analysis'] = {
+                    'image_base64': semantic_result['image_base64'],
+                    'statistics': semantic_result['statistics']
+                }
+            
+            # Generar diagrama PRISMA
+            sms_info = {
+                'titulo': sms.titulo_estudio,
+                'criterios_inclusion': sms.criterios_inclusion,
+                'criterios_exclusion': sms.criterios_exclusion,
+                'fecha_creacion': sms.fecha_creacion
+            }
+            
+            prisma_result = analyzer.generar_diagrama_prisma(articles_data, sms_info)
+            if prisma_result.get('success'):
+                visualizations_data['prisma_diagram'] = {
+                    'image_base64': prisma_result['image_base64'],
+                    'statistics': prisma_result['prisma_statistics']
+                }
+            
+            # Generar gráfico de burbujas
+            bubble_result = analyzer.generar_grafico_burbujas_tecnicas(articles_data)
+            if bubble_result.get('success'):
+                visualizations_data['bubble_chart'] = {
+                    'image_base64': bubble_result['image_base64'],
+                    'statistics': bubble_result['statistics']
+                }
+            
+        except Exception as e:
+            print(f"Error al obtener visualizaciones: {e}")
+        
+        return visualizations_data
+    
+    def _check_visualizations_availability(self, sms_id):
+        """Verificar qué visualizaciones están disponibles"""
+        status_check = {
+            'semantic_analysis': False,
+            'prisma_diagram': False,
+            'bubble_chart': False,
+            'advanced_statistics': False
+        }
+        
+        try:
+            sms = self.get_object()
+            articles_count = sms.articles.count()
+            
+            if articles_count > 0:
+                status_check['prisma_diagram'] = True
+                status_check['advanced_statistics'] = True
+                
+                if articles_count >= 3:
+                    status_check['semantic_analysis'] = True
+                    status_check['bubble_chart'] = True
+            
+        except Exception as e:
+            print(f"Error verificando visualizaciones: {e}")
+        
+        return status_check
     from .semantic_analysis import SemanticResearchAnalyzer
 
     @action(detail=True, methods=['get'], url_path='advanced-analysis')
