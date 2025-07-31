@@ -273,88 +273,81 @@ class EnhancedReportGeneratorService:
         return story
     
     def _generate_introduction(self, sms_data, articles_data):
-        """Generar una introducción extensa, coherente y profunda, sin gerundios, usando todos los datos del sistema."""
+        """Generar introducción completa para mapeo sistemático siguiendo estructura específica."""
         story = []
         story.append(Paragraph("INTRODUCCIÓN", self.styles['CustomHeading2']))
 
-        # Estadísticas reales del sistema
+        # Extraer datos del sistema
         total_articles = len(articles_data)
         years = [a.get('anio_publicacion', 'Desconocido') for a in articles_data]
         year_stats = {y: years.count(y) for y in set(years)}
         top_years = sorted(year_stats.items(), key=lambda x: x[1], reverse=True)[:3]
-        top_authors = {}
-        for a in articles_data:
-            for author in a.get('autores', '').split(','):
-                author = author.strip()
-                if author:
-                    top_authors[author] = top_authors.get(author, 0) + 1
-        top_authors_list = sorted(top_authors.items(), key=lambda x: x[1], reverse=True)[:3]
-        topics = []
-        for a in articles_data:
-            if a.get('palabras_clave'):
-                topics.extend([t.strip() for t in a['palabras_clave'].split(',')])
-        topic_stats = {}
-        for t in topics:
-            if t:
-                topic_stats[t] = topic_stats.get(t, 0) + 1
-        top_topics = sorted(topic_stats.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # Obtener preguntas de investigación y subpreguntas del sms_data
+        pregunta_principal = sms_data.get('pregunta_investigacion_1', '')
+        subpregunta_1 = sms_data.get('subpregunta_1', '')
+        subpregunta_2 = sms_data.get('subpregunta_2', '')
+        subpregunta_3 = sms_data.get('subpregunta_3', '')
+        tema = sms_data.get('titulo_estudio', '')
 
-        stats_text = (
-            f"En el análisis de la literatura, se identificaron {total_articles} artículos relevantes. "
-            f"Los años con mayor producción científica fueron: {', '.join([f'{y} ({c} artículos)' for y, c in top_years])}. "
-            f"Entre los autores más prolíficos se encuentran: {', '.join([f'{a} ({c} artículos)' for a, c in top_authors_list])}. "
-            f"Los temas más frecuentes son: {', '.join([f'{t} ({c} menciones)' for t, c in top_topics])}."
-        )
+        # PROMPT UNIFICADO PARA TODA LA INTRODUCCIÓN
+        introduction_prompt = f"""
+        Redacta una introducción académica completa (500-700 palabras) para un mapeo sistemático con la siguiente estructura OBLIGATORIA:
 
-        # 1. Contexto y motivación
-        context_prompt = (
-            f"Redacta la primera parte de una introducción académica extensa (al menos 700 palabras) para un mapeo sistemático titulado '{sms_data['titulo_estudio']}'. "
-            f"Describe el contexto general del área, su evolución, importancia y motivación para investigar este tema. "
-            f"Evita el uso de gerundios. Escribe en español, con coherencia y profundidad. Utiliza datos reales cuando sea posible. "
-            f"{stats_text}"
-            f"No incluyas ningún título, encabezado ni la palabra 'Introducción' al inicio. Solo el texto corrido"
-        )
-        context_text = self._generate_ai_text(context_prompt, max_tokens=1000)
-        story.append(Paragraph(context_text, self.styles['CustomNormal']))
+        **DATOS DEL ESTUDIO:**
+        - Tema: {tema}
+        - Pregunta principal: {pregunta_principal}
+        - Subpregunta 1: {subpregunta_1}
+        - Subpregunta 2: {subpregunta_2}
+        - Subpregunta 3: {subpregunta_3}
+        - Artículos analizados: {total_articles}
+        - Años más productivos: {', '.join([f'{y} ({c} artículos)' for y, c in top_years])}
 
-        # 2. Estado del arte y tendencias
-        state_of_art_prompt = (
-            f"Redacta una sección de introducción (al menos 700 palabras) que describa el estado del arte sobre '{sms_data['titulo_estudio']}', "
-            f"incluyendo tendencias, vacíos y temas recurrentes. Utiliza los siguientes datos: {stats_text}. "
-            f"Evita el uso de gerundios. Escribe en español, con coherencia y profundidad."
-            f"solo dame el texto sin titulo ni listas "
-        )
-        state_of_art_text = self._generate_ai_text(state_of_art_prompt, max_tokens=1000)
-        story.append(Paragraph(state_of_art_text, self.styles['CustomNormal']))
+        **ESTRUCTURA OBLIGATORIA:**
 
-        # 3. Vacíos y justificación
-        gaps_prompt = (
-            f"Redacta una sección (al menos 500 palabras) que identifique vacíos en la literatura y justifique la necesidad de realizar el mapeo sistemático sobre '{sms_data['titulo_estudio']}'. "
-            f"Evita el uso de gerundios. Escribe en español, con coherencia y profundidad. Utiliza datos reales cuando sea posible."
-            f"solo dame el texto sin titulo ni listas "
-        )
-        gaps_text = self._generate_ai_text(gaps_prompt, max_tokens=1000)
-        story.append(Paragraph(gaps_text, self.styles['CustomNormal']))
+        1. **CONTEXTO DEL TEMA (3-4 párrafos):**
+        - Presenta el contexto general de {tema}
+        - Explica la importancia y evolución del área
+        - Establece la relevancia actual del tema
+        - Incluye citas bibliográficas en formato IEEE [1][2][3]
 
-        # 4. Objetivos y relevancia del SMS
-        objectives_prompt = (
-            f"Redacta una sección (al menos 500 palabras) que exponga los objetivos del estudio, la relevancia del mapeo sistemático y cómo contribuye al área de '{sms_data['titulo_estudio']}'. "
-            f"Evita el uso de gerundios. Escribe en español, con coherencia y profundidad. Utiliza datos reales cuando sea posible."
-            f"solo dame el texto sin titulo ni listas "
-        )
-        objectives_text = self._generate_ai_text(objectives_prompt, max_tokens=1000)
-        story.append(Paragraph(objectives_text, self.styles['CustomNormal']))
+        2. **PRESENTACIÓN DE PREGUNTAS DE INVESTIGACIÓN (2-3 párrafos):**
+        - Introduce la pregunta principal: {pregunta_principal}
+        - Explica por qué esta pregunta es importante para el área
+        - Menciona brevemente las subpreguntas sin listarlas aún
 
-        # 5. Cierre de la introducción
-        closing_prompt = (
-            f"Redacta el cierre de la introducción (al menos 500 palabras), resumiendo la importancia del estudio y anticipando la estructura del documento. "
-            f"Evita el uso de gerundios. Escribe en español, con coherencia y profundidad."
-            f"solo dame el texto sin titulo ni listas "
-        )
-        closing_text = self._generate_ai_text(closing_prompt, max_tokens=1000)
-        story.append(Paragraph(closing_text, self.styles['CustomNormal']))
+        3. **JUSTIFICACIÓN DEL MAPEO SISTEMÁTICO (2 párrafos):**
+        - Texto obligatorio: "En este trabajo de investigación se realiza un estudio de mapeo sistemático sobre {tema}, con el cual se propone obtener las siguientes tres contribuciones:"
+        - Contribución 1: [Derivada de {subpregunta_1}]
+        - Contribución 2: [Derivada de {subpregunta_2}]  
+        - Contribución 3: [Derivada de {subpregunta_3}]
+
+        4. **ESTRUCTURA DEL MAPEO SISTEMÁTICO (1-2 párrafos):**
+        - Párrafo final explicando qué contendrá el mapeo sistemático
+        - Menciona las secciones principales del documento
+        - Anticipa los resultados esperados
+
+        **INSTRUCCIONES DE ESTILO:**
+        - Evita completamente el uso de gerundios
+        - Escribe en español académico formal
+        - Usa transiciones fluidas entre párrafos
+        - NO uses listas con viñetas, solo texto corrido
+        - NO incluyas títulos ni subtítulos dentro del texto
+        - Incluye citas bibliográficas realistas en formato IEEE
+        - Mantén coherencia y profundidad académica
+
+        **IMPORTANTE:** 
+        - Las contribuciones deben conectar directamente con las subpreguntas
+        - El texto debe fluir naturalmente de un párrafo al siguiente
+        - Usa los datos reales proporcionados para dar credibilidad al estudio
+        """
+
+        # Generar toda la introducción de una vez
+        introduction_text = self._generate_ai_text(introduction_prompt, max_tokens=2500)
+        story.append(Paragraph(introduction_text, self.styles['CustomNormal']))
 
         return story
+
 
     
     def _generate_detailed_methodology(self, sms_data, articles_data, visualizations_data=None):
@@ -367,7 +360,7 @@ class EnhancedReportGeneratorService:
         story.append(Paragraph(
             f"""
             Este mapeo sistematico (SMS) se basa en las directrices 
-            propuestas en (Kitchenham et al, 2010) & (Petersen et al, 2015), 
+            propuestas en [1],[2], 
             cuyo principal objetivo es analizar el estado actual de la 
             investigación relacionada con las aplicaciones informáticas 
             para {sms_data['titulo_estudio']}. Esta revisión consta de dos 
@@ -741,8 +734,8 @@ class EnhancedReportGeneratorService:
         
         Datos para analizar:
         - Número total de estudios analizados: {len(responses)}
-        - Patrones identificados: {analysis_data['patterns']}
-        - Categorías principales: {analysis_data['categories']}
+        - nombra las  3 facetas mas generales encontradas del contexto de estudio en base al tema de investigacion. identificados, solo quiero los nombres y dime la dijerencia y justificame cual utilizar
+        - tecnicas principales: {analysis_data['categories']}
         - Frecuencias: {analysis_data['frequencies']}
         
         Estadísticas adicionales:
@@ -760,6 +753,7 @@ class EnhancedReportGeneratorService:
         Usa un lenguaje académico formal y cita porcentajes específicos.
         Estructura la respuesta en párrafos claros de 80-200 palabras cada uno.
         Evita el uso de gerundios. Escribe en español, con coherencia y profundidad.
+        Evita el texto repetitivo y has que tenga fuides con lo que se esta hablando 
         solo dame el texto sin titulo ni listas 
         """
         
@@ -860,7 +854,7 @@ class EnhancedReportGeneratorService:
         return story
     
     def _generate_information_extraction_table(self, articles_data):
-        """Generar una tabla separada de extracción de información para cada artículo"""
+        """Generar UNA tabla unificada de extracción de información para todos los artículos"""
         story = []
         
         # Título de la sección
@@ -874,116 +868,155 @@ class EnhancedReportGeneratorService:
             story.append(Paragraph("No selected articles found for extraction.", self.styles['CustomNormal']))
             return story
         
-        # Generar UNA tabla por cada artículo
+        # Crear datos para UNA SOLA tabla con todos los artículos
+        table_data = []
+        
+        # Fila 1: Encabezado principal (solo una vez)
+        table_data.append([
+            Paragraph("extraccion de informacion", self.styles['CustomHeading2']), 
+            "",
+            ""
+        ])
+        
+        # Agregar datos de cada artículo consecutivamente
         for idx, article in enumerate(selected_articles, 1):
             
-            # Crear datos para ESTA tabla específica (solo 2 columnas)
-            # IMPORTANTE: Usar Paragraph para textos largos que necesitan ajustarse
-            table_data = []
+            # Calcular cuántas filas ocupará este artículo (7 filas por artículo)
+            rows_for_article = 7
+            start_row = len(table_data)  # Fila donde empieza este artículo
             
-            # Fila 1: Encabezado principal
-            table_data.append([
-                Paragraph("extraccion de informacion", self.styles['CustomHeading2']), 
-                ""
-            ])
-            
-            # Fila 2: Título
+            # Fila 1 del artículo: Título
             titulo = article.get('titulo', 'N/A')
             table_data.append([
+                Paragraph(f"{idx}", self.styles['CustomHeading5']),  # ID del artículo
                 Paragraph("Titulo", self.styles['CustomHeading5']), 
                 Paragraph(titulo, self.styles['CustomNormal'])
             ])
             
-            # Fila 3: Autor
+            # Fila 2 del artículo: Autor
             autor = article.get('autores', 'N/A')
             table_data.append([
+                "",  # Celda vacía para mantener estructura
                 Paragraph("Autor", self.styles['CustomHeading5']), 
                 Paragraph(autor, self.styles['CustomNormal'])
             ])
             
-            # Fila 4: Publicación
+            # Fila 3 del artículo: Publicación
             publicacion = article.get('journal', 'N/A')
             table_data.append([
+                "",  # Celda vacía para mantener estructura
                 Paragraph("Publicacion", self.styles['CustomHeading5']), 
                 Paragraph(publicacion, self.styles['CustomNormal'])
             ])
             
-            # Fila 5: Año
+            # Fila 4 del artículo: Año
             año = str(article.get('anio_publicacion', 'N/A'))
             table_data.append([
+                "",  # Celda vacía para mantener estructura
                 Paragraph("Año", self.styles['CustomHeading5']), 
                 Paragraph(año, self.styles['CustomNormal'])
             ])
             
-            # Fila 6: sub_pregunta1
+            # Fila 5 del artículo: sub_pregunta1
             subq1 = article.get('respuesta_subpregunta_1', 'Sin respuesta')
             table_data.append([
-                Paragraph("sub_pregunta1", self.styles['CustomHeading5']), 
+                "",  # Celda vacía para mantener estructura
+                Paragraph("Tipo de técnica:", self.styles['CustomHeading5']), 
                 Paragraph(subq1, self.styles['CustomNormal'])
             ])
             
-            # Fila 7: sub_pregunta2
+            # Fila 6 del artículo: sub_pregunta2
             subq2 = article.get('respuesta_subpregunta_2', 'Sin respuesta')
             table_data.append([
-                Paragraph("sub_pregunta2", self.styles['CustomHeading5']), 
+                "",  # Celda vacía para mantener estructura
+                Paragraph("Tipo de registro:", self.styles['CustomHeading5']), 
                 Paragraph(subq2, self.styles['CustomNormal'])
             ])
             
-            # Fila 8: sub_pregunta3
+            # Fila 7 del artículo: sub_pregunta3
             subq3 = article.get('respuesta_subpregunta_3', 'Sin respuesta')
             table_data.append([
-                Paragraph("sub_pregunta3", self.styles['CustomHeading5']), 
+                "",  # Celda vacía para mantener estructura
+                Paragraph("Tipo de limitaciones:", self.styles['CustomHeading5']), 
                 Paragraph(subq3, self.styles['CustomNormal'])
             ])
+        
+        # Configurar anchos de columna (3 columnas)
+        col_widths = [
+            0.5*inch,  # Primera columna para ID
+            1.3*inch,  # Segunda columna para nombres de campos
+            5.2*inch   # Tercera columna para datos del artículo
+        ]
+        
+        # Crear UNA SOLA tabla con todos los artículos
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        
+        # Construir los estilos dinámicamente
+        table_styles = [
+            # Estilo para el encabezado principal (primera fila, combina las 3 columnas)
+            ('SPAN', (0, 0), (2, 0)),  # Combinar las 3 columnas de la primera fila
+            ('BACKGROUND', (0, 0), (2, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (2, 0), colors.black),
+            ('ALIGN', (0, 0), (2, 0), 'CENTER'),
+            ('FONTNAME', (0, 0), (2, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (2, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (2, 0), 8),
+            ('TOPPADDING', (0, 0), (2, 0), 8),
             
-            # Configurar anchos de columna (solo 2 columnas) - Más espacio para el contenido
-            col_widths = [
-                1.3*inch,  # Primera columna para nombres de campos (reducida)
-                5.7*inch   # Segunda columna para datos del artículo (aumentada)
-            ]
+            # Estilo para la segunda columna (nombres de campos)
+            ('BACKGROUND', (1, 1), (1, -1), colors.lightgrey),
+            ('TEXTCOLOR', (1, 1), (1, -1), colors.black),
+            ('ALIGN', (1, 1), (1, -1), 'LEFT'),
+            ('VALIGN', (1, 1), (1, -1), 'TOP'),
             
-            # Crear la tabla para este artículo
-            table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            # Estilo para la tercera columna (datos del artículo)
+            ('BACKGROUND', (2, 1), (2, -1), colors.white),
+            ('TEXTCOLOR', (2, 1), (2, -1), colors.black),
+            ('ALIGN', (2, 1), (2, -1), 'LEFT'),
+            ('VALIGN', (2, 1), (2, -1), 'TOP'),
             
-            # Aplicar estilos - Optimizados para texto que se ajusta automáticamente
-            table.setStyle(TableStyle([
-                # Estilo para el encabezado principal (primera fila)
-                ('SPAN', (0, 0), (1, 0)),  # Combinar las 2 columnas de la primera fila
-                ('BACKGROUND', (0, 0), (1, 0), colors.lightgrey),
-                ('TEXTCOLOR', (0, 0), (1, 0), colors.black),
-                ('ALIGN', (0, 0), (1, 0), 'CENTER'),
-                ('FONTNAME', (0, 0), (1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (1, 0), 12),
-                ('BOTTOMPADDING', (0, 0), (1, 0), 8),
-                ('TOPPADDING', (0, 0), (1, 0), 8),
-                
-                # Estilo para la primera columna (nombres de campos)
-                ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
-                ('TEXTCOLOR', (0, 1), (0, -1), colors.black),
-                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
-                ('VALIGN', (0, 1), (0, -1), 'TOP'),
-                
-                # Estilo para la segunda columna (datos del artículo)
-                ('BACKGROUND', (1, 1), (1, -1), colors.white),
-                ('TEXTCOLOR', (1, 1), (1, -1), colors.black),
-                ('ALIGN', (1, 1), (1, -1), 'LEFT'),
-                ('VALIGN', (1, 1), (1, -1), 'TOP'),
-                
-                # Bordes para toda la tabla
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),  # Línea más gruesa bajo encabezado
-                ('LINEAFTER', (0, 1), (0, -1), 2, colors.black),  # Línea más gruesa después de nombres de campos
-                
-                # Padding optimizado para texto que se ajusta
-                ('LEFTPADDING', (0, 0), (-1, -1), 8),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-                ('TOPPADDING', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-            ]))
+            # Bordes para toda la tabla
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, colors.black),  # Línea más gruesa bajo encabezado
+            ('LINEAFTER', (0, 1), (0, -1), 2, colors.black),  # Línea más gruesa después de columna ID
+            ('LINEAFTER', (1, 1), (1, -1), 2, colors.black),  # Línea más gruesa después de nombres de campos
             
-            # Añadir la tabla al documento (SIN espacios entre tablas)
-            story.append(Spacer(1, 6))
-            story.append(table)  
+            # Padding optimizado
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 1), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+        ]
+        
+        # Agregar estilos para cada artículo (combinar celdas de ID)
+        current_row = 1  # Empezamos después del encabezado
+        for idx, article in enumerate(selected_articles, 1):
+            # Combinar las 7 filas de la columna ID para este artículo
+            end_row = current_row + 6  # 7 filas por artículo (0-6 = 7 filas)
+            
+            # Span para la columna ID de este artículo
+            table_styles.append(('SPAN', (0, current_row), (0, end_row)))
+            
+            # Estilo para la celda ID de este artículo
+            table_styles.extend([
+                ('BACKGROUND', (0, current_row), (0, end_row), colors.white),
+                ('TEXTCOLOR', (0, current_row), (0, end_row), colors.black),
+                ('ALIGN', (0, current_row), (0, end_row), 'CENTER'),
+                ('VALIGN', (0, current_row), (0, end_row), 'MIDDLE'),
+                ('FONTNAME', (0, current_row), (0, end_row), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, current_row), (0, end_row), 14),
+            ])
+            
+            # Avanzar al siguiente artículo
+            current_row += 7
+        
+        # Aplicar todos los estilos
+        table.setStyle(TableStyle(table_styles))
+        
+        # Añadir la tabla al documento
+        story.append(Spacer(1, 6))
+        story.append(table)
+        
         return story
     def _generate_analysis_and_discussions_section(self, sms_data, articles_data, visualizations_data=None):
         """

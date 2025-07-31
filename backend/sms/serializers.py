@@ -36,6 +36,7 @@ class SMSListSerializer(serializers.ModelSerializer):
 class ArticleSerializer(serializers.ModelSerializer):
     # Añadir campos calculados para asegurar valores no nulos
     journal_display = serializers.SerializerMethodField()
+    respuesta_pregunta_principal_display = serializers.SerializerMethodField()
     respuesta_subpregunta_1_display = serializers.SerializerMethodField()
     respuesta_subpregunta_2_display = serializers.SerializerMethodField()
     respuesta_subpregunta_3_display = serializers.SerializerMethodField()
@@ -45,6 +46,7 @@ class ArticleSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titulo', 'autores', 'anio_publicacion', 'resumen', 
             'palabras_clave', 'doi', 'url', 'journal', 'journal_display',
+            'respuesta_pregunta_principal', 'respuesta_pregunta_principal_display',
             'respuesta_subpregunta_1', 'respuesta_subpregunta_1_display',
             'respuesta_subpregunta_2', 'respuesta_subpregunta_2_display', 
             'respuesta_subpregunta_3', 'respuesta_subpregunta_3_display',
@@ -59,6 +61,13 @@ class ArticleSerializer(serializers.ModelSerializer):
         if journal and journal.strip() and journal != 'None':
             return journal.strip()
         return 'Sin revista'
+    
+    def get_respuesta_pregunta_principal_display(self, obj):
+        """Asegurar que la respuesta principal nunca sea None o vacía"""
+        respuesta = obj.respuesta_pregunta_principal
+        if respuesta and respuesta.strip() and respuesta != 'None':
+            return respuesta.strip()
+        return 'Sin respuesta disponible'
     
     def get_respuesta_subpregunta_1_display(self, obj):
         """Asegurar que la respuesta 1 nunca sea None o vacía"""
@@ -87,12 +96,14 @@ class ArticleSerializer(serializers.ModelSerializer):
         
         # Asegurar que los campos críticos nunca sean None
         data['journal'] = data.get('journal_display', 'Sin revista')
+        data['respuesta_pregunta_principal'] = data.get('respuesta_pregunta_principal_display', 'Sin respuesta disponible')
         data['respuesta_subpregunta_1'] = data.get('respuesta_subpregunta_1_display', 'Sin respuesta disponible')
         data['respuesta_subpregunta_2'] = data.get('respuesta_subpregunta_2_display', 'Sin respuesta disponible')
         data['respuesta_subpregunta_3'] = data.get('respuesta_subpregunta_3_display', 'Sin respuesta disponible')
         
         # Limpiar campos auxiliares
         data.pop('journal_display', None)
+        data.pop('respuesta_pregunta_principal_display', None)
         data.pop('respuesta_subpregunta_1_display', None)
         data.pop('respuesta_subpregunta_2_display', None)
         data.pop('respuesta_subpregunta_3_display', None)
@@ -107,7 +118,7 @@ class ArticleEditSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'titulo', 'autores', 'anio_publicacion', 'journal', 'doi',
             'resumen', 'palabras_clave', 'metodologia', 'resultados', 'conclusiones',
-            'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 'respuesta_subpregunta_3',
+            'respuesta_pregunta_principal', 'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 'respuesta_subpregunta_3',
             'estado', 'notas'
         ]
         read_only_fields = ['id']
@@ -171,9 +182,9 @@ class ArticleEditSerializer(serializers.ModelSerializer):
                 else:
                     data[field] = self.clean_text_field(data[field], field, "")
         
-        # Limpiar respuestas a subpreguntas
+        # Limpiar respuestas a preguntas
         subquestion_fields = [
-            'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 'respuesta_subpregunta_3'
+            'respuesta_pregunta_principal', 'respuesta_subpregunta_1', 'respuesta_subpregunta_2', 'respuesta_subpregunta_3'
         ]
         
         for field in subquestion_fields:

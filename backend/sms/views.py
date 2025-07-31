@@ -15,6 +15,7 @@ import io
 import os
 import tempfile
 import traceback
+import re 
 
 # Importaciones de tus modelos y serializadores (mantén las existentes)
 from .models import SMS, Article
@@ -27,7 +28,7 @@ from .serializers import (
 )
 
 # Importaciones de servicios (mantén las existentes)
-from .search_utils import extract_keywords_and_synonyms, generate_search_query
+from .search_utils import extract_keywords_and_synonyms, extract_keywords_and_synonyms_english, generate_search_query
 from .science_parse import setup_science_parse, extract_pdf_metadata, analyze_with_chatgpt
 
 # NUEVA IMPORTACIÓN para el análisis semántico
@@ -153,8 +154,8 @@ class SMSViewSet(viewsets.ModelViewSet):
         titulo = request.data['titulo']
         
         try:
-            # Extraer palabras clave y generar sinónimos
-            keywords_dict = extract_keywords_and_synonyms(titulo, min_terms=5, synonyms_per_term=2)
+            # Extraer palabras clave y generar sinónimos en inglés
+            keywords_dict = extract_keywords_and_synonyms_english(titulo, min_terms=5, synonyms_per_term=2)
             
             # Generar la cadena de búsqueda
             search_query = generate_search_query(keywords_dict)
@@ -353,9 +354,15 @@ class SMSViewSet(viewsets.ModelViewSet):
                 sms_data, articles_data, visualizations_data
             )
             
-            # Devolver como respuesta HTTP para descarga
+            # Generar nombre de archivo seguro
+            safe_title = re.sub(r'[^\w\s-]', '', sms.titulo_estudio).strip()
+            safe_title = re.sub(r'[-\s]+', '-', safe_title)
+            filename = f"comprehensive_report_{safe_title}_{pk}.pdf"
+            
+            # Devolver como respuesta HTTP para descarga directa
             response = HttpResponse(pdf_content, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="comprehensive_report_{pk}.pdf"'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Length'] = len(pdf_content)
             
             return response
             
@@ -931,6 +938,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                         'anio_publicacion': metadata['year'] or 2023,
                         'doi': metadata['doi'] if metadata['doi'] and metadata['doi'] != 'No detectado' else '',
                         'resumen': metadata['abstract'],
+                        'palabras_clave': analysis_results.get('keywords', '') or '',
                         # CORREGIR: Asegurar que journal no sea None o vacío
                         'journal': metadata.get('journal', 'Sin revista') or 'Sin revista',
                         'enfoque': request.data.get('enfoque', 'No especificado'),
@@ -939,6 +947,7 @@ class ArticleViewSet(viewsets.ModelViewSet):
                         'notas': analysis_results.get('analysis', ''),
                         'estado': 'PENDING',
                         # CORREGIR: Asegurar que las respuestas no sean None o vacías
+                        'respuesta_pregunta_principal': analysis_results.get('pregunta_principal', '') or 'Análisis no disponible',
                         'respuesta_subpregunta_1': analysis_results.get('subpregunta_1', '') or 'Análisis no disponible',
                         'respuesta_subpregunta_2': analysis_results.get('subpregunta_2', '') or 'Análisis no disponible',
                         'respuesta_subpregunta_3': analysis_results.get('subpregunta_3', '') or 'Análisis no disponible'

@@ -442,11 +442,12 @@ def extract_pdf_metadata(pdf_file_path):
 
 
 def analyze_with_chatgpt(metadata, subquestions):
-    """Analiza los metadatos con ChatGPT para responder las subpreguntas"""
+
     try:
-        if not subquestions:
+        if not subquestions or len(subquestions) == 0:
             return {
-                "analysis": "No hay subpreguntas para analizar",
+                "analysis": "No hay preguntas para analizar",
+                "pregunta_principal": "",
                 "subpregunta_1": "",
                 "subpregunta_2": "",
                 "subpregunta_3": ""
@@ -463,20 +464,39 @@ def analyze_with_chatgpt(metadata, subquestions):
         DOI: {metadata['doi']}
         Resumen: {metadata['abstract']}
         
-        Por favor, responde a las siguientes preguntas de forma CORTA y DIRECTA (maximo 10 palabras por respuesta):
+        Por favor, responde a las siguientes preguntas de forma CORTA y DIRECTA (máximo 10 palabras por respuesta):
         """
         
-        for i, question in enumerate(subquestions, 1):
-            if question and question.strip():
-                prompt += f"\n{i}. {question}"
+        # Agregar todas las preguntas disponibles
+        question_count = 0
+        if len(subquestions) > 0 and subquestions[0] and subquestions[0].strip():
+            question_count += 1
+            prompt += f"\nPregunta Principal: {subquestions[0]}"
+            
+        for i in range(1, min(len(subquestions), 4)):  # subpreguntas 1, 2, 3
+            if subquestions[i] and subquestions[i].strip():
+                question_count += 1
+                prompt += f"\n{i}. {subquestions[i]}"
         
-        prompt += "\n\nDevuelve tus respuestas en formato JSON con este formato exacto (incluye todas las subpreguntas aunque estén vacías):\n"
+        if question_count == 0:
+            return {
+                "analysis": "No hay preguntas válidas para analizar",
+                "pregunta_principal": "",
+                "subpregunta_1": "",
+                "subpregunta_2": "",
+                "subpregunta_3": ""
+            }
+        
+        prompt += "\n\nAdicionalmente, extrae 5-8 palabras clave técnicas en INGLÉS que mejor representen el contenido, metodología y enfoque del artículo.\n"
+        prompt += "\nDevuelve tus respuestas en formato JSON con este formato exacto (incluye todas las preguntas aunque estén vacías):\n"
         prompt += """
         {
-            "subpregunta_1": "Respuesta corta y concisa en formato de lista a la primera pregunta",
-            "subpregunta_2": "Respuesta corta y concisa en formato de lista a la segunda pregunta",
-            "subpregunta_3": "Respuesta corta y concisa en formato de lista a la tercera pregunta",
-            "analysis": "Un análisis corto y conciso si es necesario (maximo 10 palabras)"
+            "pregunta_principal": "Respuesta corta y concisa en formato de lista a la pregunta principal",
+            "subpregunta_1": "Respuesta corta y concisa en formato de lista a la primera subpregunta",
+            "subpregunta_2": "Respuesta corta y concisa en formato de lista a la segunda subpregunta",
+            "subpregunta_3": "Respuesta corta y concisa en formato de lista a la tercera subpregunta",
+            "keywords": "machine learning, neural networks, deep learning, classification, algorithm, COVID-19, symptom tracking",
+            "analysis": "Un análisis corto y conciso si es necesario (máximo 10 palabras)"
         }
         """
         
@@ -498,13 +518,17 @@ def analyze_with_chatgpt(metadata, subquestions):
             json_str = json_match.group(1)
             try:
                 result = json.loads(json_str)
-                # Asegurar que todas las subpreguntas existan
+                # Asegurar que todas las preguntas y campos existan
+                if 'pregunta_principal' not in result:
+                    result['pregunta_principal'] = ""
                 if 'subpregunta_1' not in result:
                     result['subpregunta_1'] = ""
                 if 'subpregunta_2' not in result:
                     result['subpregunta_2'] = ""
                 if 'subpregunta_3' not in result:
                     result['subpregunta_3'] = ""
+                if 'keywords' not in result:
+                    result['keywords'] = ""
                 if 'analysis' not in result:
                     result['analysis'] = "Análisis no disponible"
                 return result
@@ -517,14 +541,18 @@ def analyze_with_chatgpt(metadata, subquestions):
         
         # Crear respuestas por defecto
         result = {
+            "pregunta_principal": "",
             "subpregunta_1": "",
             "subpregunta_2": "",
             "subpregunta_3": "",
+            "keywords": "",
             "analysis": result_text  # Usar todo el texto como análisis si falla el parseo
         }
         
-        # Intentar asignar párrafos a subpreguntas
-        for i, p in enumerate(clean_paragraphs[:3], 1):
+        # Intentar asignar párrafos a preguntas
+        if len(clean_paragraphs) > 0:
+            result["pregunta_principal"] = clean_paragraphs[0].strip()
+        for i, p in enumerate(clean_paragraphs[1:4], 1):  # Tomar párrafos 1-3 para subpreguntas
             if p.strip():
                 result[f"subpregunta_{i}"] = p.strip()
         
@@ -534,6 +562,7 @@ def analyze_with_chatgpt(metadata, subquestions):
         traceback.print_exc()
         return {
             "analysis": f"Error en el análisis: {str(e)}",
+            "pregunta_principal": "",
             "subpregunta_1": "",
             "subpregunta_2": "",
             "subpregunta_3": ""
