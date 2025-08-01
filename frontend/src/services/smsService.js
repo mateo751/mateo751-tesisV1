@@ -557,6 +557,26 @@ export const smsService = {
             throw error;
         }
     },
+
+    generateComprehensiveReport: async (smsId) => {
+        try {
+            if (!smsId) {
+                throw new Error('Se requiere un ID de SMS válido');
+            }
+            
+            console.log('Generando reporte comprehensivo para SMS:', smsId);
+            
+            const response = await api.post(`/api/sms/sms/${smsId}/generate-comprehensive-report/`, {}, {
+                responseType: 'blob'
+            });
+            console.log('Reporte comprehensivo generado:', response.data);
+            
+            return response.data;
+        } catch (error) {
+            console.error('Error al generar reporte comprehensivo:', error);
+            throw new Error(error.response?.data?.error || 'Error al generar el reporte comprehensivo');
+        }
+    },
 };
 
 export default smsService;

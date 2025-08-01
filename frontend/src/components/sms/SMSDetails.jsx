@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 // En las importaciones de iconos
-import { FaArrowLeft, FaEdit, FaTable, FaFileExport, FaEye, FaChartArea, FaBrain } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaTable, FaFileExport, FaEye, FaChartArea, FaBrain, FaFilePdf } from 'react-icons/fa';
 import { useSMS } from '@/context/SMSContext';
 import { smsService } from '@/services/smsService';
 import Layout from '@/components/layout/Layout';
@@ -36,6 +36,9 @@ const SMSDetails = () => {
   // Estados para edición
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingArticleId, setEditingArticleId] = useState(null);
+
+  // Estado para generar reporte comprehensivo
+  const [loadingComprehensiveReport, setLoadingComprehensiveReport] = useState(false);
 
   // Calcular artículos filtrados y paginación
   const filteredArticles = useMemo(() => {
@@ -188,6 +191,34 @@ const SMSDetails = () => {
     } catch (err) {
       console.error('Error al exportar artículos:', err);
       alert('Error al exportar artículos: ' + err.message);
+    }
+  };
+
+  const handleGenerateComprehensiveReport = async () => {
+    try {
+      setLoadingComprehensiveReport(true);
+      console.log('Generando reporte comprehensivo...');
+      
+      const pdfBlob = await smsService.generateComprehensiveReport(id);
+      
+      // Crear un enlace de descarga para el PDF
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comprehensive_report_${sms.titulo_estudio?.replace(/[^a-zA-Z0-9]/g, '_')}_${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpiar el URL temporal
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('Reporte comprehensivo descargado exitosamente');
+    } catch (err) {
+      console.error('Error al generar reporte comprehensivo:', err);
+      alert('Error al generar el reporte comprehensivo: ' + err.message);
+    } finally {
+      setLoadingComprehensiveReport(false);
     }
   };
 
@@ -437,13 +468,27 @@ const SMSDetails = () => {
               <p className="text-gray-100">Detalles del Mapeo Sistemático</p>
             </div>
           </div>
-          <Link 
-            to={`/sms/${id}/process`} 
-            className="btn btn-primary"
-          >
-            <FaEdit className="mr-2" />
-            Editar
-          </Link>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGenerateComprehensiveReport}
+              className="btn btn-secondary"
+              disabled={loadingComprehensiveReport}
+            >
+              {loadingComprehensiveReport ? (
+                <div className="w-4 h-4 rounded-full border-t-2 border-b-2 border-white animate-spin"></div>
+              ) : (
+                <FaFilePdf className="mr-2" />
+              )}
+              {loadingComprehensiveReport ? 'Generando...' : 'Generar Reporte'}
+            </button>
+            <Link 
+              to={`/sms/${id}/process`} 
+              className="btn btn-primary"
+            >
+              <FaEdit className="mr-2" />
+              Editar
+            </Link>
+          </div>
         </div>
 
         {error && (
